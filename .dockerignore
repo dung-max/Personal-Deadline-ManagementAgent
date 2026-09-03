@@ -9,9 +9,21 @@ __pycache__
 venv
 
 .env
+.env.*
+!.env.example
 
 .pytest_cache
 .mypy_cache
 
+dist/
+build/
+*.egg-info/
+
+.coverage
+htmlcov/
+.ruff_cache/
+
 .vscode
 .idea
+
+tests/

@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from personal-deadline-management-agent!")
+"""Personal Deadline Management Agent."""
