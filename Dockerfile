@@ -15,6 +15,8 @@ RUN --mount=type=secret,id=gitlab_read_token \
 COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable
 
+COPY alembic.ini migrations/ ./
+
 EXPOSE 8000
 
 CMD ["uv", "run", "--no-dev", "uvicorn", "personal_deadline_management_agent.main:app", "--host", "0.0.0.0", "--port", "8000"]

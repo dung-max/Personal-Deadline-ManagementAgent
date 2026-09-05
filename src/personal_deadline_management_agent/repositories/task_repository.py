@@ -27,6 +27,20 @@ class TaskRepository:
     def get_by_id(self, task_id: UUID) -> Task | None:
         return self._session.get(Task, task_id)
 
+    def find_by_name(self, phrase: str) -> list[Task]:
+        """Case-insensitive substring match on task name.
+
+        Used by the resource resolver for natural-language task references.
+        Returns tasks whose ``task_name`` contains ``phrase`` (order: name ASC).
+        """
+        pattern = f"%{phrase}%"
+        stmt = (
+            select(Task)
+            .where(Task.task_name.ilike(pattern))
+            .order_by(Task.task_name.asc())
+        )
+        return list(self._session.scalars(stmt).all())
+
     def list(self) -> list[Task]:
         stmt = select(Task)
         return list(self._session.scalars(stmt).all())

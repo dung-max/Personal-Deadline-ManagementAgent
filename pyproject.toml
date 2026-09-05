@@ -12,6 +12,7 @@ dependencies = [
     "genai-core-shared==0.1.*",
     "genai-core-bedrock-llm==0.1.*",
     "sqlalchemy==2.0.43",
+    "alembic>=1.15.2",
 ]
 
 [dependency-groups]

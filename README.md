@@ -22,6 +22,18 @@ Layering: `Handler → Module → Service → Repository / External Adapter`.
 uv sync
 ```
 
+## Database migration (Docker)
+
+Migrations run explicitly — never automatically at application startup.
+
+```bash
+docker compose up -d db
+docker compose run --rm app uv run alembic upgrade head
+docker compose up -d app
+```
+
+`docker compose run` waits for PostgreSQL to become healthy (via the `app` service's `depends_on: condition: service_healthy`), then applies pending Alembic migrations. Re-running the migration command is safe: Alembic skips already-applied revisions.
+
 ## Run (local dev)
 
 ```bash

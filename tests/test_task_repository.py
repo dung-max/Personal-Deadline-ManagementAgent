@@ -165,6 +165,30 @@ def test_repository_does_not_commit():
     spy_session.close()
 
 
+# 9. find_by_name (natural-language resolution support)
+def test_find_by_name_matches_substring_case_insensitive(
+    repository: TaskRepository,
+):
+    report = repository.create(_make_task("Prepare the report"))
+    repository.create(_make_task("Clean the kitchen"))
+
+    results = repository.find_by_name("REPORT")
+    assert [t.id for t in results] == [report.id]
+
+
+def test_find_by_name_no_match(repository: TaskRepository):
+    repository.create(_make_task("Prepare the report"))
+    assert repository.find_by_name("nonexistent") == []
+
+
+def test_find_by_name_multiple_matches_ordered(repository: TaskRepository):
+    repository.create(_make_task("Report B"))
+    repository.create(_make_task("Report A"))
+
+    results = repository.find_by_name("report")
+    assert [t.task_name for t in results] == ["Report A", "Report B"]
+
+
 def test_uow_has_tasks_repository(db_session: Session):
     from personal_deadline_management_agent.uow import UnitOfWork
 

@@ -19,6 +19,10 @@ class Settings:
     database_url: str
     environment: str = "development"
 
+    # LLM / Bedrock
+    bedrock_model_id: str = ""
+    aws_default_region: str = ""
+
 
 def load_config() -> Settings:
     database_url = os.getenv("DATABASE_URL")
@@ -27,4 +31,6 @@ def load_config() -> Settings:
     return Settings(
         database_url=database_url,
         environment=os.getenv("ENVIRONMENT", "development"),
+        bedrock_model_id=os.getenv("BEDROCK_MODEL_ID", ""),
+        aws_default_region=os.getenv("AWS_DEFAULT_REGION", ""),
     )
