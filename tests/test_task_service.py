@@ -8,12 +8,12 @@ and absence of commit/rollback calls.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
-from personal_deadline_management_agent.exceptions.task import TaskNotFoundError
+from personal_deadline_management_agent.exceptions.task import InvalidTaskError, TaskNotFoundError
 from personal_deadline_management_agent.models import Task, TaskPriority, TaskStatus
 from personal_deadline_management_agent.repositories.task_repository import TaskRepository
 from personal_deadline_management_agent.services.task_service import TaskService
@@ -66,7 +66,7 @@ def task_service(fake_repo: FakeTaskRepository) -> TaskService:
 
 # 1. create_task creates Task, status defaults to TODO, repository.create is called
 def test_create_task_defaults_to_todo(task_service: TaskService, fake_repo: FakeTaskRepository):
-    deadline = datetime.now(timezone.utc)
+    deadline = datetime.now(timezone.utc) + timedelta(days=1)
     task = task_service.create_task(
         task_name="Finish Report",
         description="Quarterly summary",
@@ -87,7 +87,7 @@ def test_get_task_success(task_service: TaskService):
     created = task_service.create_task(
         task_name="Existing Task",
         description=None,
-        deadline=datetime.now(timezone.utc),
+        deadline=datetime.now(timezone.utc) + timedelta(days=1),
         priority=TaskPriority.LOW,
     )
 
@@ -108,8 +108,8 @@ def test_get_task_not_found(task_service: TaskService):
 def test_list_tasks(task_service: TaskService):
     assert task_service.list_tasks() == []
 
-    t1 = task_service.create_task("Task 1", None, datetime.now(timezone.utc), TaskPriority.LOW)
-    t2 = task_service.create_task("Task 2", None, datetime.now(timezone.utc), TaskPriority.MEDIUM)
+    t1 = task_service.create_task("Task 1", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
+    t2 = task_service.create_task("Task 2", None, datetime.now(timezone.utc) + timedelta(days=2), TaskPriority.MEDIUM)
 
     all_tasks = task_service.list_tasks()
     assert len(all_tasks) == 2
@@ -120,7 +120,7 @@ def test_list_tasks(task_service: TaskService):
 
 # 5. update_task updates only supplied fields
 def test_update_task_supplied_fields(task_service: TaskService, fake_repo: FakeTaskRepository):
-    initial_deadline = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    initial_deadline = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
     created = task_service.create_task(
         task_name="Old Name",
         description="Old Description",
@@ -144,7 +144,7 @@ def test_update_task_supplied_fields(task_service: TaskService, fake_repo: FakeT
 
 # 6. update_task preserves fields whose values were not supplied
 def test_update_task_preserves_unsupplied_fields(task_service: TaskService):
-    initial_deadline = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    initial_deadline = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
     created = task_service.create_task(
         task_name="Original Name",
         description="Original Description",
@@ -175,7 +175,7 @@ def test_update_task_not_found(task_service: TaskService):
 
 # 8. delete_task deletes existing Task
 def test_delete_task_success(task_service: TaskService, fake_repo: FakeTaskRepository):
-    created = task_service.create_task("To Delete", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    created = task_service.create_task("To Delete", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     task_service.delete_task(created.id)
 
     assert fake_repo.delete_called is True
@@ -197,7 +197,7 @@ def test_service_does_not_call_commit_or_rollback():
     mock_task = Task(
         task_name="Mock Task",
         description=None,
-        deadline=datetime.now(timezone.utc),
+        deadline=datetime.now(timezone.utc) + timedelta(days=1),
         priority=TaskPriority.LOW.value,
         status=TaskStatus.TODO.value,
     )
@@ -210,7 +210,7 @@ def test_service_does_not_call_commit_or_rollback():
     service = TaskService(mock_repo)
 
     # 1. create_task
-    service.create_task("T", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    service.create_task("T", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     # 2. get_task
     service.get_task(mock_task.id)
     # 3. list_tasks
@@ -226,3 +226,88 @@ def test_service_does_not_call_commit_or_rollback():
     for mock_call in mock_repo.mock_calls:
         assert "commit" not in mock_call[0]
         assert "rollback" not in mock_call[0]
+
+
+# --- Phase 4.8: Deadline business validation --------------------------------
+
+
+def test_create_task_future_deadline_is_valid(task_service: TaskService, fake_repo: FakeTaskRepository):
+    future = datetime.now(timezone.utc) + timedelta(days=7)
+    task = task_service.create_task(
+        task_name="Future Task",
+        description=None,
+        deadline=future,
+        priority=TaskPriority.MEDIUM,
+    )
+    assert task.deadline == future
+    assert fake_repo.create_called is True
+
+
+def test_create_task_past_deadline_rejected(task_service: TaskService, fake_repo: FakeTaskRepository):
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    with pytest.raises(InvalidTaskError, match="must not be in the past"):
+        task_service.create_task(
+            task_name="Past Task",
+            description=None,
+            deadline=past,
+            priority=TaskPriority.LOW,
+        )
+    assert fake_repo.create_called is False
+
+
+def test_create_task_past_deadline_no_repository_mutation(
+    task_service: TaskService, fake_repo: FakeTaskRepository
+):
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    with pytest.raises(InvalidTaskError):
+        task_service.create_task("X", None, past, TaskPriority.LOW)
+    assert fake_repo.create_called is False
+    assert fake_repo.update_called is False
+    assert len(fake_repo.tasks) == 0
+
+
+def test_update_task_future_new_deadline_is_valid(task_service: TaskService, fake_repo: FakeTaskRepository):
+    created = task_service.create_task(
+        "Original", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW
+    )
+    future = datetime.now(timezone.utc) + timedelta(days=30)
+    updated = task_service.update_task(created.id, deadline=future)
+    assert updated.deadline == future
+    assert fake_repo.update_called is True
+
+
+def test_update_task_past_new_deadline_rejected(task_service: TaskService, fake_repo: FakeTaskRepository):
+    created = task_service.create_task(
+        "Original", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW
+    )
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    with pytest.raises(InvalidTaskError, match="must not be in the past"):
+        task_service.update_task(created.id, deadline=past)
+    assert fake_repo.update_called is False
+
+
+def test_update_task_overdue_existing_moving_to_future_is_valid(
+    task_service: TaskService, fake_repo: FakeTaskRepository
+):
+    """An existing task with a past deadline can have its deadline moved to the future."""
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    created = task_service.create_task(
+        "Overdue Task", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW
+    )
+    # Manually set the deadline to a past value (simulates an existing overdue task).
+    created.deadline = past
+    fake_repo.tasks[created.id] = created
+
+    future = datetime.now(timezone.utc) + timedelta(days=7)
+    updated = task_service.update_task(created.id, deadline=future)
+    assert updated.deadline == future
+
+
+def test_update_task_no_deadline_change_is_valid(task_service: TaskService, fake_repo: FakeTaskRepository):
+    """Updating task_name only (no deadline param) does not trigger deadline validation."""
+    created = task_service.create_task(
+        "Original", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW
+    )
+    updated = task_service.update_task(created.id, task_name="Renamed")
+    assert updated.task_name == "Renamed"
+    assert fake_repo.update_called is True

@@ -23,6 +23,14 @@ class Settings:
     bedrock_model_id: str = ""
     aws_default_region: str = ""
 
+    # Confirmation TTL
+    pending_confirmation_ttl_seconds: int = 300
+
+    # TODO(MVP): temporary single-user authorization.
+    # Replace with a real user/account + ownership model for multi-user.
+    default_user_id: str = "00000000-0000-0000-0000-000000000001"
+    single_user_mode: bool = False
+
 
 def load_config() -> Settings:
     database_url = os.getenv("DATABASE_URL")
@@ -33,4 +41,12 @@ def load_config() -> Settings:
         environment=os.getenv("ENVIRONMENT", "development"),
         bedrock_model_id=os.getenv("BEDROCK_MODEL_ID", ""),
         aws_default_region=os.getenv("AWS_DEFAULT_REGION", ""),
+        default_user_id=os.getenv(
+            "DEFAULT_USER_ID", "00000000-0000-0000-0000-000000000001"
+        ),
+        single_user_mode=os.getenv("SINGLE_USER_MODE", "false").lower()
+        in {"1", "true", "yes", "on"},
+        pending_confirmation_ttl_seconds=int(
+            os.getenv("PENDING_CONFIRMATION_TTL_SECONDS", "300")
+        ),
     )

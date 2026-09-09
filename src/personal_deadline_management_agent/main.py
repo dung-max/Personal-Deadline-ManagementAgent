@@ -6,6 +6,7 @@ router registration, exception handlers, and lifespan. No business logic.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,9 +17,11 @@ from fastapi.responses import JSONResponse
 from .config import Settings, load_config
 from .db import create_engine_from_url, create_session_factory
 from .exceptions.reminder import InvalidReminderError, ReminderNotFoundError
-from .exceptions.task import TaskNotFoundError
-from .handlers import health, reminder_handler, task_handler
-from .models import Reminder, Task  # noqa: F401 — register models with Base.metadata
+from .exceptions.task import InvalidTaskError, TaskNotFoundError
+from .handlers import agent_handler, health, reminder_handler, task_handler
+from .models import PendingConfirmation, Reminder, Task  # noqa: F401 — register models with Base.metadata
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -37,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.settings = settings
 
     @app.exception_handler(TaskNotFoundError)
     async def task_not_found_exception_handler(
@@ -86,6 +90,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    @app.exception_handler(InvalidTaskError)
+    async def invalid_task_exception_handler(
+        request: Request, exc: InvalidTaskError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "message": str(exc),
+                "error": {
+                    "code": "INVALID_TASK",
+                    "message": str(exc),
+                },
+            },
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
@@ -113,6 +133,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def unhandled_exception_handler(
         request: Request, exc: Exception
     ) -> JSONResponse:
+        logger.exception(
+            "Unhandled exception: %s %s",
+            request.method,
+            request.url.path,
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -128,6 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(task_handler.router)
     app.include_router(reminder_handler.router)
+    app.include_router(agent_handler.router)
     return app
 
 

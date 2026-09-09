@@ -11,6 +11,7 @@ from .agent import (
     ResourceReference,
     ResponseType,
 )
+from .agent_chat import AgentChatRequest, AgentChatResponse, AgentChatStatus
 from .reminder import (
     ReminderCreateRequest,
     ReminderResponseData,
@@ -28,6 +29,9 @@ from .task import (
 __all__ = [
     "ActionProposal",
     "ActionType",
+    "AgentChatRequest",
+    "AgentChatResponse",
+    "AgentChatStatus",
     "AgentRequest",
     "AgentResponse",
     "ErrorDetail",

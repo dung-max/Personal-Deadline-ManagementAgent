@@ -5,6 +5,13 @@ from __future__ import annotations
 from uuid import UUID
 
 
+class InvalidTaskError(Exception):
+    """Raised when a task operation violates a business rule."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class TaskNotFoundError(Exception):
     """Raised when a requested task does not exist."""
 

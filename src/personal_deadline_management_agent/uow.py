@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from .repositories.pending_confirmation_repository import (
+    PendingConfirmationRepository,
+)
 from .repositories.reminder_repository import ReminderRepository
 from .repositories.task_repository import TaskRepository
 
@@ -18,6 +21,7 @@ class UnitOfWork:
         self._session = session
         self.tasks = TaskRepository(session)
         self.reminders = ReminderRepository(session)
+        self.pending_confirmations = PendingConfirmationRepository(session)
 
     def commit(self) -> None:
         self._session.commit()

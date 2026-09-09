@@ -75,6 +75,10 @@ use NEEDS_CLARIFICATION with a brief message explaining what is needed.
 with a brief message. Never map it to an unrelated action.
 - For conversational requests that do not describe an action (e.g. greetings, \
 questions), use CONVERSATION.
+- If the user is confirming a previously pending destructive action \
+(e.g. "yes", "ok", "confirm", "đồng ý", "có", "xác nhận"), use CONFIRMATION. \
+If the user includes a reference ID (UUID), set resource_id to that UUID string. \
+If no reference ID is provided, set resource_id to null.
 """
 
 
@@ -85,6 +89,7 @@ questions), use CONVERSATION.
 _RESPONSE_TYPE_MAP: dict[str, ResponseType] = {
     "ACTION_PROPOSED": ResponseType.ACTION_PROPOSED,
     "NEEDS_CLARIFICATION": ResponseType.CLARIFICATION_REQUIRED,
+    "CONFIRMATION": ResponseType.CONFIRMATION,
     "REJECTED": ResponseType.REJECTED,
     "CONVERSATION": ResponseType.CONVERSATION,
 }
@@ -118,11 +123,37 @@ class AgentInterpreter:
     def _to_agent_response(self, output: InterpretationOutput) -> AgentResponse:
         if output.response_type == "ACTION_PROPOSED":
             return self._handle_action_proposed(output)
+        if output.response_type == "CONFIRMATION":
+            return self._handle_confirmation(output)
         response_type = _RESPONSE_TYPE_MAP[output.response_type]
         return AgentResponse(
             response_type=response_type,
             message=output.message,
             proposal=None,
+        )
+
+    def _handle_confirmation(self, output: InterpretationOutput) -> AgentResponse:
+        """Build a confirm-intent response.
+
+        ``resource_id`` carries the pending-confirmation reference ID when
+        the user included one; an invalid UUID is treated as an error
+        requiring clarification — never silently dropped.
+        """
+        confirmation_id: UUID | None = None
+        if output.resource_id is not None:
+            try:
+                confirmation_id = UUID(output.resource_id)
+            except ValueError:
+                return AgentResponse(
+                    response_type=ResponseType.CLARIFICATION_REQUIRED,
+                    message=output.message or "The confirmation reference is invalid.",
+                    proposal=None,
+                )
+        return AgentResponse(
+            response_type=ResponseType.CONFIRMATION,
+            message=output.message,
+            proposal=None,
+            confirmation_id=confirmation_id,
         )
 
     def _handle_action_proposed(self, output: InterpretationOutput) -> AgentResponse:

@@ -49,6 +49,7 @@ class ResponseType(str, enum.Enum):
     ACTION_PROPOSED = "ACTION_PROPOSED"
     CLARIFICATION_REQUIRED = "CLARIFICATION_REQUIRED"
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
+    CONFIRMATION = "CONFIRMATION"
     REJECTED = "REJECTED"
     CONVERSATION = "CONVERSATION"
 
@@ -111,6 +112,7 @@ class AgentResponse(BaseModel):
     response_type: ResponseType
     message: str
     proposal: ActionProposal | None = None
+    confirmation_id: UUID | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -122,6 +124,7 @@ class AgentResponse(BaseModel):
 InterpretationResponseType = Literal[
     "ACTION_PROPOSED",
     "NEEDS_CLARIFICATION",
+    "CONFIRMATION",
     "REJECTED",
     "CONVERSATION",
 ]

@@ -373,3 +373,54 @@ def test_system_and_user_prompts_are_separate():
     # The user message must never be concatenated into the trusted system prompt.
     assert "ignore your instructions" not in _SYSTEM_PROMPT
     assert call["system_prompt"] is not call["user_prompt"]
+
+
+# --- CONFIRMATION (confirm-intent) -------------------------------------------
+
+
+def test_interpret_confirmation_without_reference_id():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="CONFIRMATION",
+            message="",
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="yes"))
+
+    assert response.response_type == ResponseType.CONFIRMATION
+    assert response.proposal is None
+    assert response.confirmation_id is None
+
+
+def test_interpret_confirmation_with_valid_reference_id():
+    ref_id = str(uuid4())
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="CONFIRMATION",
+            resource_id=ref_id,
+            message="",
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message=f"yes {ref_id}"))
+
+    assert response.response_type == ResponseType.CONFIRMATION
+    assert response.proposal is None
+    assert response.confirmation_id == UUID(ref_id)
+
+
+def test_interpret_confirmation_with_invalid_reference_id():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="CONFIRMATION",
+            resource_id="not-a-real-uuid",
+            message="",
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="yes invalid-id"))
+
+    assert response.response_type == ResponseType.CLARIFICATION_REQUIRED
+    assert response.proposal is None
+    assert response.confirmation_id is None

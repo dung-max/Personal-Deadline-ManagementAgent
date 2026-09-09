@@ -92,6 +92,67 @@ def test_create_task_invalid_priority(client: TestClient):
     assert body["error"]["code"] == "VALIDATION_ERROR"
 
 
+# --- Phase 4.8: Deadline business validation via HTTP ------------------------
+
+
+def test_create_task_past_deadline_rejected(client: TestClient):
+    payload = {
+        "taskName": "Past Deadline Task",
+        "deadline": "2025-01-01T00:00:00Z",
+        "priority": "LOW",
+    }
+    response = client.post("/api/v1/tasks", json=payload)
+    assert response.status_code == 400
+
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_TASK"
+    assert "past" in body["error"]["message"].lower()
+
+
+def test_update_task_past_deadline_rejected(client: TestClient):
+    # Create a valid task first
+    created = client.post(
+        "/api/v1/tasks",
+        json={
+            "taskName": "Original",
+            "deadline": "2026-12-01T00:00:00Z",
+            "priority": "LOW",
+        },
+    )
+    task_id = created.json()["data"]["taskId"]
+
+    # Attempt to set a past deadline
+    response = client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"deadline": "2025-01-01T00:00:00Z"},
+    )
+    assert response.status_code == 400
+
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_TASK"
+
+
+def test_update_task_future_deadline_is_valid(client: TestClient):
+    created = client.post(
+        "/api/v1/tasks",
+        json={
+            "taskName": "Original",
+            "deadline": "2026-10-01T00:00:00Z",
+            "priority": "LOW",
+        },
+    )
+    task_id = created.json()["data"]["taskId"]
+
+    response = client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"deadline": "2027-01-01T00:00:00Z"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["deadline"] == "2027-01-01T00:00:00Z"
+
+
 # --- 2. GET /api/v1/tasks/{taskId} ---
 
 

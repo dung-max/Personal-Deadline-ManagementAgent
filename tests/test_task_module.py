@@ -9,12 +9,12 @@ Verifies use-case orchestration and transaction boundaries:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
-from personal_deadline_management_agent.exceptions.task import TaskNotFoundError
+from personal_deadline_management_agent.exceptions.task import InvalidTaskError, TaskNotFoundError
 from personal_deadline_management_agent.models import Task, TaskPriority, TaskStatus
 from personal_deadline_management_agent.modules.task_module import TaskModule
 from personal_deadline_management_agent.repositories.task_repository import TaskRepository
@@ -83,7 +83,7 @@ def task_module(fake_uow: FakeUnitOfWork) -> TaskModule:
 
 
 def test_create_task_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
-    deadline = datetime.now(timezone.utc)
+    deadline = datetime.now(timezone.utc) + timedelta(days=1)
     task = task_module.create_task(
         task_name="Module Create",
         description="Desc",
@@ -106,8 +106,45 @@ def test_create_task_failure_triggers_rollback(fake_uow: FakeUnitOfWork):
         module.create_task(
             task_name="Fail Task",
             description=None,
-            deadline=datetime.now(timezone.utc),
+            deadline=datetime.now(timezone.utc) + timedelta(days=1),
             priority=TaskPriority.LOW,
+        )
+
+    assert fake_uow.commit_count == 0
+    assert fake_uow.rollback_count == 1
+
+
+def test_create_task_past_deadline_rolls_back_and_propagates(
+    fake_uow: FakeUnitOfWork,
+):
+    """Business validation failure must not commit and must roll back."""
+    module = TaskModule(fake_uow)  # type: ignore[arg-type]
+
+    with pytest.raises(InvalidTaskError, match="must not be in the past"):
+        module.create_task(
+            task_name="Past Task",
+            description=None,
+            deadline=datetime.now(timezone.utc) - timedelta(hours=1),
+            priority=TaskPriority.LOW,
+        )
+
+    assert fake_uow.commit_count == 0
+    assert fake_uow.rollback_count == 1
+    assert len(fake_uow.tasks.tasks) == 0
+
+
+def test_update_task_past_deadline_rolls_back_and_propagates(
+    fake_uow: FakeUnitOfWork,
+):
+    module = TaskModule(fake_uow)  # type: ignore[arg-type]
+    created = module.create_task(
+        "To Update", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW
+    )
+    fake_uow.commit_count = 0
+
+    with pytest.raises(InvalidTaskError, match="must not be in the past"):
+        module.update_task(
+            created.id, deadline=datetime.now(timezone.utc) - timedelta(hours=1)
         )
 
     assert fake_uow.commit_count == 0
@@ -121,7 +158,7 @@ def test_get_task_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
     created = task_module.create_task(
         task_name="Get Me",
         description=None,
-        deadline=datetime.now(timezone.utc),
+        deadline=datetime.now(timezone.utc) + timedelta(days=1),
         priority=TaskPriority.LOW,
     )
     fake_uow.commit_count = 0  # reset after create
@@ -147,8 +184,8 @@ def test_get_task_not_found_propagates(task_module: TaskModule, fake_uow: FakeUn
 
 
 def test_list_tasks_does_not_commit(task_module: TaskModule, fake_uow: FakeUnitOfWork):
-    task_module.create_task("T1", None, datetime.now(timezone.utc), TaskPriority.LOW)
-    task_module.create_task("T2", None, datetime.now(timezone.utc), TaskPriority.HIGH)
+    task_module.create_task("T1", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
+    task_module.create_task("T2", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.HIGH)
     fake_uow.commit_count = 0
 
     tasks = task_module.list_tasks()
@@ -161,7 +198,7 @@ def test_list_tasks_does_not_commit(task_module: TaskModule, fake_uow: FakeUnitO
 
 
 def test_update_task_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
-    created = task_module.create_task("Original", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    created = task_module.create_task("Original", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     fake_uow.commit_count = 0
 
     updated = task_module.update_task(created.id, task_name="Updated", status=TaskStatus.IN_PROGRESS)
@@ -173,7 +210,7 @@ def test_update_task_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
 
 def test_update_task_failure_triggers_rollback(fake_uow: FakeUnitOfWork):
     module = TaskModule(fake_uow)  # type: ignore[arg-type]
-    created = module.create_task("To Update", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    created = module.create_task("To Update", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     fake_uow.commit_count = 0
 
     # Simulate failure on repository.update
@@ -199,7 +236,7 @@ def test_update_task_not_found_rolls_back_and_propagates(task_module: TaskModule
 
 
 def test_delete_task_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
-    created = task_module.create_task("To Delete", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    created = task_module.create_task("To Delete", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     fake_uow.commit_count = 0
 
     task_module.delete_task(created.id)
@@ -233,7 +270,7 @@ def test_read_operations_never_commit(task_module: TaskModule, fake_uow: FakeUni
 
 def test_write_operations_commit_exactly_once_on_success(task_module: TaskModule, fake_uow: FakeUnitOfWork):
     fake_uow.commit_count = 0
-    task = task_module.create_task("W1", None, datetime.now(timezone.utc), TaskPriority.LOW)
+    task = task_module.create_task("W1", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
     assert fake_uow.commit_count == 1
 
     task_module.update_task(task.id, task_name="W2")
@@ -249,7 +286,7 @@ def test_write_failures_never_commit_and_always_rollback(fake_uow: FakeUnitOfWor
     module = TaskModule(fake_uow)  # type: ignore[arg-type]
 
     with pytest.raises(ValueError, match="Boom"):
-        module.create_task("X", None, datetime.now(timezone.utc), TaskPriority.LOW)
+        module.create_task("X", None, datetime.now(timezone.utc) + timedelta(days=1), TaskPriority.LOW)
 
     assert fake_uow.commit_count == 0
     assert fake_uow.rollback_count == 1

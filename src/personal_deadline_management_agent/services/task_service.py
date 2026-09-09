@@ -7,10 +7,10 @@ Does not own transaction lifecycle (commit/rollback remain with UnitOfWork).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
-from ..exceptions.task import TaskNotFoundError
+from ..exceptions.task import InvalidTaskError, TaskNotFoundError
 from ..models import Task, TaskPriority, TaskStatus
 from ..repositories.task_repository import TaskRepository
 
@@ -26,6 +26,11 @@ class TaskService:
         deadline: datetime,
         priority: TaskPriority,
     ) -> Task:
+        if deadline < datetime.now(timezone.utc):
+            raise InvalidTaskError(
+                f"deadline ({deadline}) must not be in the past"
+            )
+
         priority_value = (
             priority.value if isinstance(priority, TaskPriority) else priority
         )
@@ -57,6 +62,11 @@ class TaskService:
         status: TaskStatus | None = None,
     ) -> Task:
         task = self.get_task(task_id)
+
+        if deadline is not None and deadline < datetime.now(timezone.utc):
+            raise InvalidTaskError(
+                f"deadline ({deadline}) must not be in the past"
+            )
 
         if task_name is not None:
             task.task_name = task_name

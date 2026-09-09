@@ -17,6 +17,34 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from genai_core.genai_shared.database import Base
 
 
+class PendingConfirmationStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class PendingConfirmation(Base):
+    __tablename__ = "pending_confirmations"
+
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    execution_command: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default=PendingConfirmationStatus.PENDING.value
+    )
+
+    __table_args__ = (
+        Index("ix_pending_confirmations_user_id", "user_id"),
+        Index("ix_pending_confirmations_status", "status"),
+        Index("ix_pending_confirmations_expires_at", "expires_at"),
+    )
+
+
 class TaskPriority(str, enum.Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
