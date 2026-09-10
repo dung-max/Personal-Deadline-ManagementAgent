@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from ..models import Task, TaskPriority, TaskStatus
-from ..services.task_service import TaskService
+from ..services.task_service import TaskService, _UNSET
 from ..uow import UnitOfWork
 
 
@@ -50,7 +50,7 @@ class TaskModule:
         self,
         task_id: UUID,
         task_name: str | None = None,
-        description: str | None = None,
+        description: object = _UNSET,
         deadline: datetime | None = None,
         priority: TaskPriority | None = None,
         status: TaskStatus | None = None,

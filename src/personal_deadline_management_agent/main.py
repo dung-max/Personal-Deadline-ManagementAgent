@@ -32,8 +32,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_engine_from_url(settings.database_url)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
-        yield
-        engine.dispose()
+        try:
+            yield
+        finally:
+            try:
+                engine.dispose()
+            except Exception:
+                logger.warning("Failed to dispose engine", exc_info=True)
 
     app = FastAPI(
         title="Personal Deadline Management Agent",
@@ -157,4 +162,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-app = create_app()
+try:
+    app = create_app()
+except Exception:
+    logger.exception("Failed to create application")
+    raise

@@ -27,7 +27,7 @@ Database
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -38,6 +38,11 @@ from ..models import TaskPriority
 from ..modules.reminder_module import ReminderModule
 from ..modules.task_module import TaskModule
 from ..schemas.agent import ActionType
+from ..utils.datetime_utils import (
+    NaiveDateTimeError,
+    parse_iso_datetime,
+    require_aware_utc,
+)
 from .execution_command import ExecutionCommand
 from .execution_result import ExecutionErrorCode, ExecutionResult, ExecutionStatus
 
@@ -48,22 +53,17 @@ logger = logging.getLogger(__name__)
 
 
 def _to_datetime(value: Any) -> datetime:
-    """Convert a parameter value to a timezone-aware datetime.
+    """Convert a parameter value to a timezone-aware UTC datetime.
 
     Accepts a ``datetime`` (pass-through), or an ISO-8601 string.  Naive
-    datetimes are treated as UTC.  Raises ``TypeError``/``ValueError`` on
-    bad input so the caller can catch and produce a deterministic result.
+    datetimes are rejected — never silently assumed to be UTC.  Raises
+    ``TypeError``/``ValueError``/``NaiveDateTimeError`` on bad input so the
+    caller can catch and produce a deterministic result.
     """
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value
+        return require_aware_utc(value)
     if isinstance(value, str):
-        text = value.rstrip("Z") + "+00:00" if value.endswith("Z") else value
-        dt = datetime.fromisoformat(text)
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt
+        return parse_iso_datetime(value)
     raise TypeError(f"Expected datetime or ISO-8601 string, got {type(value).__name__}")
 
 
@@ -81,7 +81,10 @@ def _error_code_for(exc: Exception) -> ExecutionErrorCode:
     """Map an application exception to a safe, deterministic error category."""
     if isinstance(exc, (TaskNotFoundError, ReminderNotFoundError)):
         return ExecutionErrorCode.NOT_FOUND
-    if isinstance(exc, (InvalidTaskError, InvalidReminderError)):
+    if isinstance(
+        exc,
+        (InvalidTaskError, InvalidReminderError, NaiveDateTimeError, ValueError),
+    ):
         return ExecutionErrorCode.INVALID_INPUT
     return ExecutionErrorCode.INFRASTRUCTURE
 

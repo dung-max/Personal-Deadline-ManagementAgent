@@ -6,6 +6,7 @@ from .pending_confirmation_module import (
     PendingConfirmationModule,
 )
 from .reminder_module import ReminderModule
+from .scheduler_module import SchedulerModule
 from .task_module import TaskModule
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "ConfirmResult",
     "PendingConfirmationModule",
     "ReminderModule",
+    "SchedulerModule",
     "TaskModule",
 ]

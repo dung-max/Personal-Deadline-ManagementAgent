@@ -26,10 +26,24 @@ class Settings:
     # Confirmation TTL
     pending_confirmation_ttl_seconds: int = 300
 
+    # Scheduler
+    scheduler_tick_seconds: int = 60
+    scheduler_batch_size: int = 100
+
     # TODO(MVP): temporary single-user authorization.
     # Replace with a real user/account + ownership model for multi-user.
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
     single_user_mode: bool = False
+
+    def __post_init__(self) -> None:
+        if self.scheduler_tick_seconds < 5:
+            raise ValueError(
+                f"scheduler_tick_seconds must be >= 5, got {self.scheduler_tick_seconds}"
+            )
+        if not (1 <= self.scheduler_batch_size <= 1000):
+            raise ValueError(
+                f"scheduler_batch_size must be between 1 and 1000, got {self.scheduler_batch_size}"
+            )
 
 
 def load_config() -> Settings:
@@ -48,5 +62,11 @@ def load_config() -> Settings:
         in {"1", "true", "yes", "on"},
         pending_confirmation_ttl_seconds=int(
             os.getenv("PENDING_CONFIRMATION_TTL_SECONDS", "300")
+        ),
+        scheduler_tick_seconds=int(
+            os.getenv("SCHEDULER_TICK_SECONDS", "60")
+        ),
+        scheduler_batch_size=int(
+            os.getenv("SCHEDULER_BATCH_SIZE", "100")
         ),
     )

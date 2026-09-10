@@ -13,6 +13,7 @@ from .execution_command import ExecutionCommand
 from .execution_result import ExecutionErrorCode, ExecutionResult, ExecutionStatus
 from .reminder_service import ReminderService
 from .resource_resolver import ResourceResolver
+from .scheduler_service import SchedulerService, TickResult
 from .task_service import TaskService
 
 __all__ = [
@@ -29,7 +30,9 @@ __all__ = [
     "ExecutionStatus",
     "ReminderService",
     "ResourceResolver",
+    "SchedulerService",
     "TaskService",
+    "TickResult",
     "ValidatedAction",
     "ValidationStatus",
 ]

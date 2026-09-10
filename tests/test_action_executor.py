@@ -219,17 +219,66 @@ def test_delete_reminder_routes_to_reminder_module(executor, reminder_module):
     reminder_module.delete_reminder.assert_called_once_with(reminder_id=REMINDER_ID)
 
 
-def test_naive_datetime_string_is_treated_as_utc(executor, task_module):
+def test_naive_datetime_string_is_rejected(executor, task_module):
+    """Naive datetime strings must be rejected, not silently treated as UTC."""
     params = {"taskName": "Report", "deadline": "2026-10-01T12:00:00"}
     action = _validated(ActionType.CREATE_TASK, parameters=params)
     command = _command(ActionType.CREATE_TASK, parameters=params)
 
     result = executor.execute(_authorized(action), command)
 
+    assert result.status == ExecutionStatus.EXECUTION_FAILED
+    assert result.error_code == ExecutionErrorCode.INVALID_INPUT
+    task_module.create_task.assert_not_called()
+
+
+def test_naive_datetime_object_is_rejected(executor, task_module):
+    """Naive datetime objects must be rejected in parameters."""
+    params = {"taskName": "Report", "deadline": datetime(2026, 10, 1, 12, 0)}
+    action = _validated(ActionType.CREATE_TASK, parameters=params)
+    command = _command(ActionType.CREATE_TASK, parameters=params)
+
+    result = executor.execute(_authorized(action), command)
+
+    assert result.status == ExecutionStatus.EXECUTION_FAILED
+    assert result.error_code == ExecutionErrorCode.INVALID_INPUT
+    task_module.create_task.assert_not_called()
+
+
+def test_aware_plus_0700_deadline_is_normalized_to_utc(executor, task_module):
+    """An aware deadline with +07:00 offset is converted to UTC before passing to module."""
+    params = {"taskName": "Report", "deadline": "2026-10-01T19:00:00+07:00"}
+    action = _validated(ActionType.CREATE_TASK, parameters=params)
+    command = _command(ActionType.CREATE_TASK, parameters=params)
+
+    result = executor.execute(_authorized(action), command)
+
     assert result.status == ExecutionStatus.EXECUTED
+    # 2026-10-01T19:00:00+07:00 == 2026-10-01T12:00:00+00:00
     assert task_module.create_task.call_args.kwargs["deadline"] == datetime(
         2026, 10, 1, 12, 0, tzinfo=timezone.utc
     )
+
+
+def test_naive_remind_at_is_rejected(executor, reminder_module):
+    """Naive datetime strings in remindAt must be rejected."""
+    params = {"remindAt": "2026-09-20T09:00:00"}
+    action = _validated(
+        ActionType.CREATE_REMINDER,
+        resource_id=TASK_ID,
+        parameters=params,
+    )
+    command = _command(
+        ActionType.CREATE_REMINDER,
+        resource_id=TASK_ID,
+        parameters=params,
+    )
+
+    result = executor.execute(_authorized(action), command)
+
+    assert result.status == ExecutionStatus.EXECUTION_FAILED
+    assert result.error_code == ExecutionErrorCode.INVALID_INPUT
+    reminder_module.create_reminder.assert_not_called()
 
 
 # --- Safety boundary ---------------------------------------------------------

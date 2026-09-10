@@ -46,6 +46,30 @@ uv run uvicorn personal_deadline_management_agent.main:app --reload
 docker compose up --build
 ```
 
+## Scheduler
+
+The scheduler runs as a separate container using the same application image.
+It processes due reminders periodically, marks them as `SENT`, and delivers notifications via the configured provider.
+
+```bash
+# Run all services (API + scheduler + DB)
+docker compose up --build
+
+# Run scheduler only
+docker compose up --build scheduler
+
+# View scheduler logs
+docker compose logs -f scheduler
+
+# Restart scheduler independently
+docker compose restart scheduler
+```
+
+Scheduler configuration is controlled by environment variables (see `.env.example`):
+
+- `SCHEDULER_TICK_SECONDS` — interval between ticks (default: 60, minimum: 5)
+- `SCHEDULER_BATCH_SIZE` — max reminders per tick (default: 100, range: 1–1000)
+
 ## Test
 
 ```bash

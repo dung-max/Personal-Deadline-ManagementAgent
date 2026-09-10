@@ -36,5 +36,23 @@ services:
       timeout: 5s
       retries: 5
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uv", "run", "--no-dev", "python", "-m", "personal_deadline_management_agent.scheduler"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:

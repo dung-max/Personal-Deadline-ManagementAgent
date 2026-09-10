@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..models import Reminder, ReminderStatus
+from ..utils.datetime_utils import require_aware_utc
 
 AssignableReminderStatus = Literal[
     ReminderStatus.PENDING,
@@ -21,12 +22,26 @@ class ReminderCreateRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @field_validator("remind_at")
+    @classmethod
+    def _remind_at_must_be_aware(cls, value: datetime) -> datetime:
+        """Reject naive datetimes and normalize aware ones to UTC."""
+        return require_aware_utc(value)
+
 
 class ReminderUpdateRequest(BaseModel):
     remind_at: datetime | None = Field(default=None, alias="remindAt")
     status: AssignableReminderStatus | None = Field(default=None)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("remind_at")
+    @classmethod
+    def _remind_at_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        """Reject naive datetimes and normalize aware ones to UTC."""
+        if value is None:
+            return None
+        return require_aware_utc(value)
 
 
 class ReminderResponseData(BaseModel):

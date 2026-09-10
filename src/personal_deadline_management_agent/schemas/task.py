@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..models import Task, TaskPriority, TaskStatus
+from ..utils.datetime_utils import require_aware_utc
 
 T = TypeVar("T")
 
@@ -21,6 +22,12 @@ class TaskCreateRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @field_validator("deadline")
+    @classmethod
+    def _deadline_must_be_aware(cls, value: datetime) -> datetime:
+        """Reject naive datetimes and normalize aware ones to UTC."""
+        return require_aware_utc(value)
+
 
 class TaskUpdateRequest(BaseModel):
     task_name: str | None = Field(default=None, alias="taskName")
@@ -30,6 +37,14 @@ class TaskUpdateRequest(BaseModel):
     status: TaskStatus | None = Field(default=None)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("deadline")
+    @classmethod
+    def _deadline_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        """Reject naive datetimes and normalize aware ones to UTC."""
+        if value is None:
+            return None
+        return require_aware_utc(value)
 
 
 class TaskResponseData(BaseModel):

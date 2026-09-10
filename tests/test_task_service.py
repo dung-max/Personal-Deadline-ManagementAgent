@@ -165,6 +165,41 @@ def test_update_task_preserves_unsupplied_fields(task_service: TaskService):
     assert updated.status == TaskStatus.TODO.value
 
 
+# 6a. update_task with explicit description=None clears the description to NULL
+def test_update_task_clears_description_with_explicit_none(task_service: TaskService):
+    created = task_service.create_task(
+        task_name="Task With Description",
+        description="Original Description",
+        deadline=datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc),
+        priority=TaskPriority.MEDIUM,
+    )
+
+    updated = task_service.update_task(
+        task_id=created.id,
+        description=None,
+    )
+
+    assert updated.description is None
+
+
+# 6b. update_task without description preserves the existing description
+def test_update_task_preserves_description_when_not_supplied(task_service: TaskService):
+    created = task_service.create_task(
+        task_name="Task With Description",
+        description="Original Description",
+        deadline=datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc),
+        priority=TaskPriority.MEDIUM,
+    )
+
+    updated = task_service.update_task(
+        task_id=created.id,
+        task_name="Renamed",
+    )
+
+    assert updated.task_name == "Renamed"
+    assert updated.description == "Original Description"
+
+
 # 7. update_task raises TaskNotFoundError for missing Task
 def test_update_task_not_found(task_service: TaskService):
     missing_id = uuid.uuid4()

@@ -245,6 +245,14 @@ def test_repository_does_not_commit():
     repo.delete(reminder.id)
     assert not committed, "delete() must NOT commit"
 
+    # 5. find_due should not commit
+    repo.find_due(limit=10, now=datetime.now(timezone.utc))
+    assert not committed, "find_due() must NOT commit"
+
+    # 6. mark_sent should not commit
+    repo.mark_sent(reminder.id, datetime.now(timezone.utc))
+    assert not committed, "mark_sent() must NOT commit"
+
     spy_session.close()
     engine.dispose()
 
@@ -283,3 +291,226 @@ def test_uow_reminders_shares_session(db_session: Session, task: Task):
 
     assert db_session.get(Reminder, created.id) is not None
     assert uow.reminders.list_by_task_id(task.id) == [created]
+
+
+# -------------------------------------------------------------------
+# 11. find_due — scheduler tick query
+# -------------------------------------------------------------------
+
+NOW = datetime.now(timezone.utc)
+
+
+def _make_reminder_for_find(
+    session: Session,
+    task_id: uuid.UUID,
+    remind_at: datetime,
+    status: str = ReminderStatus.PENDING.value,
+) -> Reminder:
+    r = Reminder(
+        task_id=task_id,
+        remind_at=remind_at,
+        status=status,
+    )
+    session.add(r)
+    session.flush()
+    session.refresh(r)
+    return r
+
+
+def test_find_due_returns_only_pending_and_due(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    past = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+    future = _make_reminder_for_find(db_session, task.id, NOW + timedelta(hours=1))
+    sent = _make_reminder_for_find(
+        db_session, task.id, NOW - timedelta(hours=2), ReminderStatus.SENT.value
+    )
+    cancelled = _make_reminder_for_find(
+        db_session, task.id, NOW - timedelta(hours=3), ReminderStatus.CANCELLED.value
+    )
+
+    results = repository.find_due(limit=100, now=NOW)
+    ids = {r.id for r in results}
+
+    assert past.id in ids
+    assert future.id not in ids
+    assert sent.id not in ids
+    assert cancelled.id not in ids
+
+
+def test_find_due_includes_exactly_at_now(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    exact = _make_reminder_for_find(db_session, task.id, NOW)
+
+    results = repository.find_due(limit=100, now=NOW)
+    ids = {r.id for r in results}
+
+    assert exact.id in ids
+
+
+def test_find_due_excludes_future(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    _make_reminder_for_find(db_session, task.id, NOW + timedelta(hours=1))
+
+    results = repository.find_due(limit=100, now=NOW)
+    assert results == []
+
+
+def test_find_due_orders_by_remind_at_then_id(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    first = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=3))
+    second = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=3))
+    third = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+
+    results = repository.find_due(limit=100, now=NOW)
+    ids = [r.id for r in results]
+
+    # same remind_at → id ASC ordering ensures stable order
+    if ids.index(first.id) > ids.index(second.id):
+        assert ids == [second.id, first.id, third.id]
+    else:
+        assert ids == [first.id, second.id, third.id]
+
+
+def test_find_due_respects_limit(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    for _ in range(5):
+        _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+
+    results = repository.find_due(limit=3, now=NOW)
+    assert len(results) == 3
+
+
+def test_find_due_empty_when_none_due(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    _make_reminder_for_find(db_session, task.id, NOW + timedelta(hours=1))
+
+    assert repository.find_due(limit=100, now=NOW - timedelta(hours=1)) == []
+
+
+def test_find_due_empty_on_empty_table(
+    repository: ReminderRepository,
+):
+    assert repository.find_due(limit=100, now=NOW) == []
+
+
+# -------------------------------------------------------------------
+# 12. mark_sent — atomic claim
+# -------------------------------------------------------------------
+
+def test_mark_sent_transitions_pending_to_sent(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+
+    count = repository.mark_sent(r.id, NOW)
+
+    assert count == 1
+    db_session.expire_all()
+    assert repository.get_by_id(r.id).status == ReminderStatus.SENT.value
+
+
+def test_mark_sent_sets_updated_at(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+
+    repository.mark_sent(r.id, NOW)
+
+    db_session.expire_all()
+    assert repository.get_by_id(r.id).updated_at == NOW
+
+
+def test_mark_sent_returns_zero_when_already_sent(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(
+        db_session, task.id, NOW - timedelta(hours=1), ReminderStatus.SENT.value
+    )
+
+    count = repository.mark_sent(r.id, NOW)
+    assert count == 0
+
+
+def test_mark_sent_returns_zero_when_cancelled(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(
+        db_session, task.id, NOW - timedelta(hours=1), ReminderStatus.CANCELLED.value
+    )
+
+    count = repository.mark_sent(r.id, NOW)
+    assert count == 0
+
+
+def test_mark_sent_returns_zero_when_not_found(
+    repository: ReminderRepository,
+):
+    count = repository.mark_sent(uuid.uuid4(), NOW)
+    assert count == 0
+
+
+def test_mark_sent_returns_zero_when_future_remind_at(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(db_session, task.id, NOW + timedelta(hours=1))
+
+    count = repository.mark_sent(r.id, NOW)
+    assert count == 0
+
+
+def test_mark_sent_second_call_returns_zero(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(db_session, task.id, NOW - timedelta(hours=1))
+
+    first = repository.mark_sent(r.id, NOW)
+    second = repository.mark_sent(r.id, NOW)
+
+    assert first == 1
+    assert second == 0
+
+
+def test_mark_sent_cannot_change_sent_to_sent(
+    repository: ReminderRepository,
+    db_session: Session,
+    task: Task,
+):
+    r = _make_reminder_for_find(
+        db_session, task.id, NOW - timedelta(hours=1), ReminderStatus.SENT.value
+    )
+
+    count = repository.mark_sent(r.id, NOW)
+    assert count == 0
+
+    db_session.expire_all()
+    assert repository.get_by_id(r.id).status == ReminderStatus.SENT.value

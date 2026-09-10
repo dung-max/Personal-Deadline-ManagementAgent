@@ -14,6 +14,10 @@ from ..exceptions.task import InvalidTaskError, TaskNotFoundError
 from ..models import Task, TaskPriority, TaskStatus
 from ..repositories.task_repository import TaskRepository
 
+# Sentinel distinguishing "field not supplied" from an explicit null.
+# Only ``description`` is nullable in the domain, so only it needs this.
+_UNSET: object = object()
+
 
 class TaskService:
     def __init__(self, task_repository: TaskRepository) -> None:
@@ -56,7 +60,7 @@ class TaskService:
         self,
         task_id: UUID,
         task_name: str | None = None,
-        description: str | None = None,
+        description: object = _UNSET,
         deadline: datetime | None = None,
         priority: TaskPriority | None = None,
         status: TaskStatus | None = None,
@@ -70,8 +74,8 @@ class TaskService:
 
         if task_name is not None:
             task.task_name = task_name
-        if description is not None:
-            task.description = description
+        if description is not _UNSET:
+            task.description = description  # type: ignore[assignment]
         if deadline is not None:
             task.deadline = deadline
         if priority is not None:
