@@ -284,3 +284,30 @@ def test_delete_reminder_unresolved(resolver):
     result = r.resolve(proposal)
     assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
     assert result.validated_action is None
+
+
+# --- ANALYZE_WORKLOAD --------------------------------------------------------
+
+
+def test_analyze_workload_resolves_to_no_resource(resolver):
+    r = resolver()
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "THIS_WEEK"},
+    )
+    va = _valid(r.resolve(proposal))
+    assert va.action_type == ActionType.ANALYZE_WORKLOAD
+    assert va.resource_id is None
+    assert va.parameters["date_range_expression"] == "THIS_WEEK"
+
+
+def test_analyze_workload_with_resource_requires_clarification(resolver):
+    r = resolver(tasks=[_task("report")])
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        resource=ResourceReference(id=uuid4()),
+        parameters={"date_range_expression": "THIS_WEEK"},
+    )
+    result = r.resolve(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+    assert result.validated_action is None

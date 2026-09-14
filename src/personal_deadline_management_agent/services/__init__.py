@@ -9,12 +9,14 @@ from .authorization_service import (
     AuthorizationService,
     AuthorizationStatus,
 )
+from .date_range_resolver import DateRangeResolver
 from .execution_command import ExecutionCommand
 from .execution_result import ExecutionErrorCode, ExecutionResult, ExecutionStatus
 from .reminder_service import ReminderService
 from .resource_resolver import ResourceResolver
 from .scheduler_service import SchedulerService, TickResult
 from .task_service import TaskService
+from .workload_analysis_service import WorkloadAnalysisService
 
 __all__ = [
     "ActionExecutor",
@@ -24,6 +26,7 @@ __all__ = [
     "AuthorizationResult",
     "AuthorizationService",
     "AuthorizationStatus",
+    "DateRangeResolver",
     "ExecutionCommand",
     "ExecutionErrorCode",
     "ExecutionResult",
@@ -35,4 +38,5 @@ __all__ = [
     "TickResult",
     "ValidatedAction",
     "ValidationStatus",
+    "WorkloadAnalysisService",
 ]

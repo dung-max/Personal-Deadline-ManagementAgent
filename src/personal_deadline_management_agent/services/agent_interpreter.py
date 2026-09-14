@@ -51,6 +51,7 @@ Supported action types:
   CREATE_REMINDER — create a reminder for a task
   UPDATE_REMINDER — update an existing reminder
   DELETE_REMINDER — delete an existing reminder
+  ANALYZE_WORKLOAD — analyze the user's workload for a specified date range
 
 Return your interpretation as structured JSON matching the required output schema.
 
@@ -59,16 +60,32 @@ Rules:
 - For UPDATE_TASK, DELETE_TASK, UPDATE_REMINDER, DELETE_REMINDER you MUST \
 identify the target resource.
 - For CREATE_REMINDER you MUST identify the parent task.
-- CREATE_TASK has no target resource — never set resource_id or \
-resource_description for it; put the new task's name in parameters.taskName.
+- CREATE_TASK and ANALYZE_WORKLOAD have no target resource — never set resource_id or \
+resource_description for them; for CREATE_TASK put the new task's name in \
+parameters.taskName.
 - If the user provides an explicit UUID, set resource_id to that UUID as a string.
 - If the target is described in natural language (e.g. "my report task"), \
 set resource_description to that exact phrase. NEVER invent or guess a UUID — \
 only set resource_id when the user explicitly gave one.
 - Extract action-specific data into the "parameters" field. \
 For tasks include: taskName, description, deadline, priority. \
-For reminders include: remindAt and optionally taskId (if a UUID was given).
+For reminders include: remindAt and optionally taskId (if a UUID was given). \
+For ANALYZE_WORKLOAD include: date_range_expression (required), and if the \
+expression is "EXPLICIT_RANGE", also include explicit_start and explicit_end.
 - Use ISO 8601 for date/time values.
+- For ANALYZE_WORKLOAD, map the user's date reference to a semantic \
+date_range_expression. NEVER calculate actual date boundaries — only identify \
+the semantic keyword:
+  "today" / "tasks today" / "workload today" → TODAY
+  "tomorrow" / "tasks tomorrow" → TOMORROW
+  "this week" / "workload this week" / "how many tasks this week" → THIS_WEEK
+  "next week" / "busy next week" → NEXT_WEEK
+  "this month" / "workload this month" → THIS_MONTH
+  "next month" / "workload next month" → NEXT_MONTH
+  Explicit dates like "from Sep 15 to Sep 21" → EXPLICIT_RANGE (with explicit_start \
+and explicit_end as ISO 8601).
+  Do NOT calculate which actual dates "this week" corresponds to — the application \
+will resolve the semantic expression deterministically.
 - If the request is ambiguous or missing information required for the action, \
 use NEEDS_CLARIFICATION with a brief message explaining what is needed.
 - If the request does not correspond to any supported action, use REJECTED \
@@ -164,8 +181,8 @@ class AgentInterpreter:
                 proposal=None,
             )
 
-        # CREATE_TASK has no target resource.
-        if output.action_type == ActionType.CREATE_TASK:
+        # CREATE_TASK and ANALYZE_WORKLOAD have no target resource.
+        if output.action_type in {ActionType.CREATE_TASK, ActionType.ANALYZE_WORKLOAD}:
             resource: ResourceReference | None = None
         else:
             try:

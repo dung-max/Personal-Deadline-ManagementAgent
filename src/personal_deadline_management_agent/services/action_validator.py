@@ -22,12 +22,19 @@ ValidatedAction (canonical, ready for execution)
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..schemas.agent import ActionProposal, ActionType, ResourceReference
+from ..schemas.agent import (
+    ActionProposal,
+    ActionType,
+    DateRangeExpression,
+    ResourceReference,
+)
+from ..utils.datetime_utils import parse_iso_datetime, require_aware_utc
 
 
 class ValidationStatus(str, enum.Enum):
@@ -71,12 +78,19 @@ _RESOURCE_REQUIRED_ACTIONS = {
     ActionType.DELETE_REMINDER,
 }
 
+# Actions that never target an existing resource.
+_NO_RESOURCE_ACTIONS = {
+    ActionType.CREATE_TASK,
+    ActionType.ANALYZE_WORKLOAD,
+}
+
 # Minimal structural parameter requirements per action.  Only the presence of
 # required keys is checked — business values (date ranges, priorities, etc.)
 # are NOT validated here.
 _REQUIRED_PARAMETERS: dict[ActionType, set[str]] = {
     ActionType.CREATE_TASK: {"taskName", "deadline"},
     ActionType.CREATE_REMINDER: {"remindAt"},
+    ActionType.ANALYZE_WORKLOAD: {"date_range_expression"},
 }
 
 # Update actions must change at least one field.
@@ -95,11 +109,14 @@ class ActionValidator:
             )
 
         # --- resource requirement per action --------------------------------
-        if proposal.action_type == ActionType.CREATE_TASK:
+        if proposal.action_type in _NO_RESOURCE_ACTIONS:
             if proposal.resource is not None:
                 return ValidationResult(
                     status=ValidationStatus.CLARIFICATION_REQUIRED,
-                    message="CREATE_TASK does not target an existing resource.",
+                    message=(
+                        f"{proposal.action_type.value} does not target an "
+                        "existing resource."
+                    ),
                 )
         elif proposal.resource is None:
             return ValidationResult(
@@ -130,6 +147,62 @@ class ActionValidator:
                 status=ValidationStatus.CLARIFICATION_REQUIRED,
                 message="An update action must change at least one field.",
             )
+
+        # --- ANALYZE_WORKLOAD semantic validation ---------------------------
+        if proposal.action_type == ActionType.ANALYZE_WORKLOAD:
+            return self._validate_analyze_workload(proposal.parameters)
+
+        return ValidationResult(status=ValidationStatus.VALID)
+
+    @staticmethod
+    def _validate_analyze_workload(parameters: dict[str, Any]) -> ValidationResult:
+        """Validate ANALYZE_WORKLOAD parameters (semantic, no date arithmetic).
+
+        Only checks that the expression is a known ``DateRangeExpression`` and
+        that ``EXPLICIT_RANGE`` carries both explicit dates with ``start <= end``.
+        Actual date-boundary calculation is owned by ``DateRangeResolver``.
+        """
+        expression = parameters.get("date_range_expression")
+
+        if not isinstance(expression, DateRangeExpression):
+            try:
+                expression = DateRangeExpression(expression)
+            except (ValueError, TypeError):
+                return ValidationResult(
+                    status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    message=(
+                        "A valid date range is required for workload analysis "
+                        f"(got {expression!r})."
+                    ),
+                )
+
+        if expression is DateRangeExpression.EXPLICIT_RANGE:
+            explicit_start = parameters.get("explicit_start")
+            explicit_end = parameters.get("explicit_end")
+
+            if explicit_start is None or explicit_end is None:
+                return ValidationResult(
+                    status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    message=(
+                        "EXPLICIT_RANGE requires both explicit_start and "
+                        "explicit_end."
+                    ),
+                )
+
+            try:
+                start = parse_iso_datetime(explicit_start)
+                end = parse_iso_datetime(explicit_end)
+            except (ValueError, TypeError) as exc:
+                return ValidationResult(
+                    status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    message=f"Invalid explicit date: {exc}",
+                )
+
+            if start > end:
+                return ValidationResult(
+                    status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    message="explicit_start must be <= explicit_end.",
+                )
 
         return ValidationResult(status=ValidationStatus.VALID)
 

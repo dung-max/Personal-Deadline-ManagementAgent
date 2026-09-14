@@ -28,6 +28,24 @@ class ActionType(str, enum.Enum):
     CREATE_REMINDER = "CREATE_REMINDER"
     UPDATE_REMINDER = "UPDATE_REMINDER"
     DELETE_REMINDER = "DELETE_REMINDER"
+    ANALYZE_WORKLOAD = "ANALYZE_WORKLOAD"
+
+
+class DateRangeExpression(str, enum.Enum):
+    """Semantic date-range expression produced by the LLM.
+
+    The LLM outputs one of these keywords; the deterministic
+    ``DateRangeResolver`` converts it into an actual UTC datetime range.
+    The LLM must NOT calculate actual datetime boundaries.
+    """
+
+    TODAY = "TODAY"
+    TOMORROW = "TOMORROW"
+    THIS_WEEK = "THIS_WEEK"
+    NEXT_WEEK = "NEXT_WEEK"
+    THIS_MONTH = "THIS_MONTH"
+    NEXT_MONTH = "NEXT_MONTH"
+    EXPLICIT_RANGE = "EXPLICIT_RANGE"
 
 
 class ProposalStatus(str, enum.Enum):

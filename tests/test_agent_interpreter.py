@@ -424,3 +424,222 @@ def test_interpret_confirmation_with_invalid_reference_id():
     assert response.response_type == ResponseType.CLARIFICATION_REQUIRED
     assert response.proposal is None
     assert response.confirmation_id is None
+
+
+# --- ANALYZE_WORKLOAD ----------------------------------------------------------
+
+
+def test_interpret_analyze_workload_today():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "TODAY"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="How many tasks do I have today?"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "TODAY"
+
+
+def test_interpret_analyze_workload_tomorrow():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "TOMORROW"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="What tasks do I have tomorrow?"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "TOMORROW"
+
+
+def test_interpret_analyze_workload_this_week():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Analyze my workload this week."))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "THIS_WEEK"
+
+
+def test_interpret_analyze_workload_next_week():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "NEXT_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="What does my workload look like next week?"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "NEXT_WEEK"
+
+
+def test_interpret_analyze_workload_this_month():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_MONTH"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Show my workload this month."))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "THIS_MONTH"
+
+
+def test_interpret_analyze_workload_next_month():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "NEXT_MONTH"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Analyze my workload next month."))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "NEXT_MONTH"
+
+
+def test_interpret_analyze_workload_explicit_range():
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={
+                "date_range_expression": "EXPLICIT_RANGE",
+                "explicit_start": "2026-09-15T00:00:00Z",
+                "explicit_end": "2026-09-21T23:59:59Z",
+            },
+        )
+    )
+
+    response = interpreter.interpret(
+        AgentRequest(message="Analyze my workload from September 15 to September 21.")
+    )
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "EXPLICIT_RANGE"
+    assert response.proposal.parameters["explicit_start"] == "2026-09-15T00:00:00Z"
+    assert response.proposal.parameters["explicit_end"] == "2026-09-21T23:59:59Z"
+
+
+def test_interpret_analyze_workload_vietnamese_this_week():
+    """Vietnamese workload analysis intent - tuần này."""
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Phân tích công việc tuần này"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "THIS_WEEK"
+
+
+def test_interpret_analyze_workload_deadline_collision_intent():
+    """Deadline collision detection intent."""
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Có deadline nào trùng không?"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    # The LLM may interpret "có deadline nào trùng không?" as a THIS_WEEK query
+    # or may extract a different semantic range. The key is it maps to ANALYZE_WORKLOAD.
+    assert "date_range_expression" in response.proposal.parameters
+
+
+def test_interpret_analyze_workload_busy_workload_intent():
+    """Busy workload detection intent - Vietnamese."""
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(
+        AgentRequest(message="Tuần này tôi có quá nhiều việc không?")
+    )
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "THIS_WEEK"
+
+
+def test_interpret_analyze_workload_check_workload_vietnamese():
+    """Vietnamese: Check workload this week."""
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Kiểm tra workload tuần này"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    assert response.proposal.resource is None
+    assert response.proposal.parameters["date_range_expression"] == "THIS_WEEK"
+
+
+def test_interpret_analyze_workload_no_date_calculation():
+    """Verify the interpreter does NOT calculate concrete start/end datetimes.
+
+    The interpreter extracts semantic date range expressions only.
+    DateRangeResolver is responsible for calculating actual UTC boundaries.
+    """
+    interpreter, _ = _interpreter(
+        _output(
+            response_type="ACTION_PROPOSED",
+            action_type=ActionType.ANALYZE_WORKLOAD,
+            parameters={"date_range_expression": "THIS_WEEK"},
+        )
+    )
+
+    response = interpreter.interpret(AgentRequest(message="Analyze my workload this week"))
+
+    _assert_action_proposal(response, ActionType.ANALYZE_WORKLOAD)
+    # The parameters should contain the semantic expression, NOT calculated dates
+    assert response.proposal.parameters["date_range_expression"] == "THIS_WEEK"
+    # Ensure no concrete datetime calculation happened in the interpreter
+    assert "start" not in response.proposal.parameters or response.proposal.parameters.get("explicit_start") is None
+    assert "end" not in response.proposal.parameters or response.proposal.parameters.get("explicit_end") is None

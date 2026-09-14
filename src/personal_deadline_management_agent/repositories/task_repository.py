@@ -6,6 +6,7 @@ Transaction ownership remains with UnitOfWork; this repository does NOT commit o
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -38,6 +39,22 @@ class TaskRepository:
             select(Task)
             .where(Task.task_name.ilike(pattern))
             .order_by(Task.task_name.asc())
+        )
+        return list(self._session.scalars(stmt).all())
+
+    def find_by_deadline_range(
+        self, start: datetime, end: datetime
+    ) -> list[Task]:
+        """Return tasks whose deadline falls within ``[start, end]`` (inclusive).
+
+        The range is inclusive on both boundaries and the result is ordered
+        by ``deadline ASC``.  No status filtering is applied here — active-task
+        filtering, if required, belongs to the service layer.
+        """
+        stmt = (
+            select(Task)
+            .where(Task.deadline >= start, Task.deadline <= end)
+            .order_by(Task.deadline.asc())
         )
         return list(self._session.scalars(stmt).all())
 

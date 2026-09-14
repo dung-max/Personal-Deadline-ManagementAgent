@@ -54,6 +54,7 @@ SUPPORTED_ACTIONS = frozenset(
         ActionType.CREATE_REMINDER,
         ActionType.UPDATE_REMINDER,
         ActionType.DELETE_REMINDER,
+        ActionType.ANALYZE_WORKLOAD,
     }
 )
 

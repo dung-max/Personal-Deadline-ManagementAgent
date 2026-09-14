@@ -24,15 +24,32 @@ uv sync
 
 ## Database migration (Docker)
 
-Migrations run explicitly — never automatically at application startup.
+Migrations run automatically on `docker compose up --build` via a one-shot
+`migrate` service. Both the API and Scheduler wait for migration to finish
+before starting.
 
 ```bash
-docker compose up -d db
-docker compose run --rm app uv run alembic upgrade head
-docker compose up -d app
+# Build + migrate + start everything
+docker compose up --build
+
+# To re-run migrations manually after a schema change
+docker compose up --build migrate
 ```
 
-`docker compose run` waits for PostgreSQL to become healthy (via the `app` service's `depends_on: condition: service_healthy`), then applies pending Alembic migrations. Re-running the migration command is safe: Alembic skips already-applied revisions.
+Alembic skips already-applied revisions, so re-running is safe.
+
+### Build secret (GitLab registry)
+
+`docker compose build` needs `GITLAB_READ_TOKEN` available to the host
+environment. It is passed into the Docker build as a BuildKit secret via
+`secrets: [gitlab_read_token]` → `environment: GITLAB_READ_TOKEN`.
+
+Set it before building:
+
+```bash
+export GITLAB_READ_TOKEN="your-token-here"
+docker compose up --build
+```
 
 ## Run (local dev)
 

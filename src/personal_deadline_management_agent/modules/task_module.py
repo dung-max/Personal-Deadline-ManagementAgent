@@ -77,3 +77,12 @@ class TaskModule:
         except Exception:
             self._uow.rollback()
             raise
+
+    def find_tasks_by_deadline_range(
+        self, start: datetime, end: datetime
+    ) -> list[Task]:
+        """Read-only query for tasks within a deadline range.
+
+        No commit/rollback needed for read-only operations.
+        """
+        return self._uow.tasks.find_by_deadline_range(start, end)

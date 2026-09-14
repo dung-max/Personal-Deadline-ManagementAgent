@@ -304,3 +304,153 @@ def test_delete_reminder_missing_resource(validator: ActionValidator):
     proposal = ActionProposal(action_type=ActionType.DELETE_REMINDER, resource=None)
     result = validator.validate(proposal)
     assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+
+
+# --- ANALYZE_WORKLOAD --------------------------------------------------------
+
+
+def test_analyze_workload_valid_this_week(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "THIS_WEEK"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_today(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "TODAY"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_next_week(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "NEXT_WEEK"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_this_month(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "THIS_MONTH"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_next_month(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "NEXT_MONTH"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_tomorrow(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "TOMORROW"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_valid_explicit_range(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "EXPLICIT_RANGE",
+            "explicit_start": "2026-09-15T00:00:00Z",
+            "explicit_end": "2026-09-21T23:59:59Z",
+        },
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.VALID
+
+
+def test_analyze_workload_missing_expression(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+    assert "date_range_expression" in result.message
+
+
+def test_analyze_workload_invalid_expression(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={"date_range_expression": "LAST_YEAR"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+
+
+def test_analyze_workload_with_resource_clarification(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        resource=ResourceReference(natural_language="this week"),
+        parameters={"date_range_expression": "THIS_WEEK"},
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+    assert "does not target" in result.message.lower()
+
+
+def test_analyze_workload_explicit_range_missing_start(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "EXPLICIT_RANGE",
+            "explicit_end": "2026-09-21T23:59:59Z",
+        },
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+
+
+def test_analyze_workload_explicit_range_missing_end(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "EXPLICIT_RANGE",
+            "explicit_start": "2026-09-15T00:00:00Z",
+        },
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+
+
+def test_analyze_workload_explicit_range_invalid_dates(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "EXPLICIT_RANGE",
+            "explicit_start": "not-a-date",
+            "explicit_end": "2026-09-21T23:59:59Z",
+        },
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED
+
+
+def test_analyze_workload_explicit_range_start_after_end(validator: ActionValidator):
+    proposal = ActionProposal(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "EXPLICIT_RANGE",
+            "explicit_start": "2026-09-21T00:00:00Z",
+            "explicit_end": "2026-09-15T00:00:00Z",
+        },
+    )
+    result = validator.validate(proposal)
+    assert result.status == ValidationStatus.CLARIFICATION_REQUIRED

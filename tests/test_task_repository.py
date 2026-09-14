@@ -42,11 +42,12 @@ def _make_task(
     desc: str | None = "Test Description",
     priority: str = TaskPriority.MEDIUM.value,
     status: str = TaskStatus.TODO.value,
+    deadline: datetime | None = None,
 ) -> Task:
     return Task(
         task_name=name,
         description=desc,
-        deadline=datetime.now(timezone.utc),
+        deadline=deadline or datetime.now(timezone.utc),
         priority=priority,
         status=status,
     )
@@ -195,3 +196,106 @@ def test_uow_has_tasks_repository(db_session: Session):
     uow = UnitOfWork(db_session)
     assert hasattr(uow, "tasks")
     assert isinstance(uow.tasks, TaskRepository)
+
+
+# --- find_by_deadline_range ----------------------------------------------------
+
+
+# 10. Tasks inside range are returned
+def test_find_by_deadline_range_inside(repository: TaskRepository):
+    start = datetime(2026, 9, 14, 0, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+
+    a = repository.create(
+        _make_task("Task A", deadline=datetime(2026, 9, 15, 10, 0, tzinfo=timezone.utc))
+    )
+    b = repository.create(
+        _make_task("Task B", deadline=datetime(2026, 9, 18, 14, 0, tzinfo=timezone.utc))
+    )
+
+    results = repository.find_by_deadline_range(start, end)
+    ids = [t.id for t in results]
+    assert a.id in ids
+    assert b.id in ids
+
+
+# 11. Lower boundary is inclusive
+def test_find_by_deadline_range_lower_boundary(repository: TaskRepository):
+    boundary = datetime(2026, 9, 14, 8, 30, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+
+    task = repository.create(
+        _make_task("Boundary task", deadline=boundary)
+    )
+
+    results = repository.find_by_deadline_range(boundary, end)
+    assert len(results) == 1
+    assert results[0].id == task.id
+
+
+# 12. Upper boundary is inclusive
+def test_find_by_deadline_range_upper_boundary(repository: TaskRepository):
+    start = datetime(2026, 9, 14, 0, 0, 0, tzinfo=timezone.utc)
+    boundary = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+
+    task = repository.create(
+        _make_task("Boundary task", deadline=boundary)
+    )
+
+    results = repository.find_by_deadline_range(start, boundary)
+    assert len(results) == 1
+    assert results[0].id == task.id
+
+
+# 13. Tasks outside range excluded
+def test_find_by_deadline_range_excludes_outside(repository: TaskRepository):
+    start = datetime(2026, 9, 14, 0, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+
+    repository.create(
+        _make_task("Before start", deadline=datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc))
+    )
+    repository.create(
+        _make_task("After end", deadline=datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc))
+    )
+    repository.create(
+        _make_task("Inside range", deadline=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc))
+    )
+
+    results = repository.find_by_deadline_range(start, end)
+    assert len(results) == 1
+    assert results[0].task_name == "Inside range"
+
+
+# 14. Results ordered by deadline ASC
+def test_find_by_deadline_range_ordered_by_deadline(repository: TaskRepository):
+    start = datetime(2026, 9, 14, 0, 0, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+
+    # Insert in deliberately unsorted order
+    repository.create(
+        _make_task("C", deadline=datetime(2026, 9, 19, 8, 0, tzinfo=timezone.utc))
+    )
+    repository.create(
+        _make_task("A", deadline=datetime(2026, 9, 15, 8, 0, tzinfo=timezone.utc))
+    )
+    repository.create(
+        _make_task("B", deadline=datetime(2026, 9, 17, 8, 0, tzinfo=timezone.utc))
+    )
+
+    results = repository.find_by_deadline_range(start, end)
+    deadlines = [t.deadline for t in results]
+    assert deadlines == sorted(deadlines)
+
+
+# 15. Empty result when no tasks match
+def test_find_by_deadline_range_empty(repository: TaskRepository):
+    repository.create(
+        _make_task("Outside", deadline=datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc))
+    )
+
+    results = repository.find_by_deadline_range(
+        datetime(2026, 9, 14, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc),
+    )
+    assert results == []

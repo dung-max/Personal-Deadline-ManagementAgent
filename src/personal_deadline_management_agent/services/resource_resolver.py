@@ -71,6 +71,16 @@ class ResourceResolver:
                 )
             return self._resolved(proposal, resource_id=None)
 
+        if proposal.action_type == ActionType.ANALYZE_WORKLOAD:
+            if proposal.resource is not None:
+                return ResolutionResult(
+                    status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    message=(
+                        "ANALYZE_WORKLOAD does not target an existing resource."
+                    ),
+                )
+            return self._resolved(proposal, resource_id=None)
+
         if proposal.resource is None:
             return ResolutionResult(
                 status=ValidationStatus.CLARIFICATION_REQUIRED,

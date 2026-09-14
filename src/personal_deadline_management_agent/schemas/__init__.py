@@ -5,6 +5,7 @@ from .agent import (
     ActionType,
     AgentRequest,
     AgentResponse,
+    DateRangeExpression,
     InterpretationOutput,
     InterpretationResponseType,
     ProposalStatus,
@@ -25,6 +26,12 @@ from .task import (
     TaskResponseData,
     TaskUpdateRequest,
 )
+from .workload import (
+    BusyDayWarning,
+    DeadlineCollision,
+    TaskSummary,
+    WorkloadAnalysisResult,
+)
 
 __all__ = [
     "ActionProposal",
@@ -34,6 +41,9 @@ __all__ = [
     "AgentChatStatus",
     "AgentRequest",
     "AgentResponse",
+    "BusyDayWarning",
+    "DateRangeExpression",
+    "DeadlineCollision",
     "ErrorDetail",
     "ErrorResponse",
     "InterpretationOutput",
@@ -47,5 +57,7 @@ __all__ = [
     "SuccessResponse",
     "TaskCreateRequest",
     "TaskResponseData",
+    "TaskSummary",
     "TaskUpdateRequest",
+    "WorkloadAnalysisResult",
 ]

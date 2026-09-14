@@ -28,8 +28,11 @@ def policy() -> SafetyPolicy:
     return SafetyPolicy()
 
 
+_NO_RESOURCE_ACTIONS = {ActionType.CREATE_TASK, ActionType.ANALYZE_WORKLOAD}
+
+
 def _action(action_type: ActionType) -> ValidatedAction:
-    resource_id = None if action_type == ActionType.CREATE_TASK else uuid4()
+    resource_id = None if action_type in _NO_RESOURCE_ACTIONS else uuid4()
     return ValidatedAction(action_type=action_type, resource_id=resource_id)
 
 
@@ -46,7 +49,7 @@ def test_decision_status_values():
     }
 
 
-def test_supported_actions_are_the_mvp_six_actions():
+def test_supported_actions_are_the_mvp_actions():
     assert SUPPORTED_ACTIONS == {
         ActionType.CREATE_TASK,
         ActionType.UPDATE_TASK,
@@ -54,6 +57,7 @@ def test_supported_actions_are_the_mvp_six_actions():
         ActionType.CREATE_REMINDER,
         ActionType.UPDATE_REMINDER,
         ActionType.DELETE_REMINDER,
+        ActionType.ANALYZE_WORKLOAD,
     }
 
 
@@ -80,6 +84,7 @@ def test_decision_result_has_no_execute_method(policy: SafetyPolicy):
         ActionType.UPDATE_TASK,
         ActionType.CREATE_REMINDER,
         ActionType.UPDATE_REMINDER,
+        ActionType.ANALYZE_WORKLOAD,
     ],
 )
 def test_non_destructive_supported_actions_are_authorized(

@@ -18,6 +18,7 @@ messages are deterministic and safe.
 from __future__ import annotations
 
 import enum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,5 +57,6 @@ class ExecutionResult(BaseModel):
     error_code: ExecutionErrorCode | None = Field(default=None, alias="errorCode")
     result_id: UUID | None = Field(default=None, alias="resultId")
     result_name: str | None = Field(default=None, alias="resultName")
+    result_payload: dict[str, Any] | None = Field(default=None, alias="resultPayload")
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
