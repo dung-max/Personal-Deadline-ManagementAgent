@@ -10,6 +10,7 @@ Architecture::
     SchedulerModule  (commit/rollback)
           ↓
     SchedulerService (tick logic)
+    
           ↓
     Repository / NotificationProvider
           ↓

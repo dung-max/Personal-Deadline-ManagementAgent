@@ -203,10 +203,21 @@ def _seed_task_raw(
 
 def _agent_post(app, message: str, fake_llm) -> Any:
     """POST /api/v1/agent/chat with a faked LLM."""
-    from personal_deadline_management_agent.dependencies import get_agent_interpreter
+    from personal_deadline_management_agent.dependencies import (
+        get_agent_interpreter,
+        get_agent_response_generator,
+        get_llm,
+    )
     from personal_deadline_management_agent.services.agent_interpreter import AgentInterpreter
+    from personal_deadline_management_agent.services.agent_response_generator import (
+        AgentResponseGenerator,
+    )
 
+    app.dependency_overrides[get_llm] = lambda: fake_llm
     app.dependency_overrides[get_agent_interpreter] = lambda: AgentInterpreter(fake_llm)
+    app.dependency_overrides[get_agent_response_generator] = lambda: AgentResponseGenerator(
+        llm=fake_llm, enable_llm=False
+    )
     with TestClient(app) as client:
         resp = client.post("/api/v1/agent/chat", json={"message": message})
     return resp

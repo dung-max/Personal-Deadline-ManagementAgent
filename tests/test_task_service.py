@@ -128,7 +128,7 @@ def test_update_task_supplied_fields(task_service: TaskService, fake_repo: FakeT
         priority=TaskPriority.LOW,
     )
 
-    new_deadline = datetime(2026, 9, 10, 15, 0, tzinfo=timezone.utc)
+    new_deadline = datetime(2026, 9, 25, 15, 0, tzinfo=timezone.utc)
     updated = task_service.update_task(
         task_id=created.id,
         task_name="New Name",

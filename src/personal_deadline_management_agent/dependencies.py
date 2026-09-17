@@ -25,6 +25,7 @@ from .repositories.task_repository import TaskRepository
 from .services.action_executor import ActionExecutor
 from .services.action_validator import ActionValidator
 from .services.agent_interpreter import AgentInterpreter
+from .services.agent_response_generator import AgentResponseGenerator
 from .services.authorization_service import AuthorizationService
 from .services.resource_resolver import ResourceResolver
 from .uow import UnitOfWork
@@ -107,6 +108,12 @@ def get_agent_interpreter(
     llm: StructuredGenerationPort = Depends(get_llm),
 ) -> AgentInterpreter:
     return AgentInterpreter(llm)
+
+
+def get_agent_response_generator(
+    llm: StructuredGenerationPort = Depends(get_llm),
+) -> AgentResponseGenerator:
+    return AgentResponseGenerator(llm=llm, enable_llm=True)
 
 
 # --- Validation / Resolution -------------------------------------------------

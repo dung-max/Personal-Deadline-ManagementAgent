@@ -21,6 +21,7 @@ from sqlalchemy.pool import StaticPool
 from genai_core.genai_shared.database import Base
 from personal_deadline_management_agent.config import Settings
 from personal_deadline_management_agent.dependencies import (
+    get_agent_response_generator,
     get_llm,
     get_session_factory,
 )
@@ -117,6 +118,13 @@ def test_agent_creates_task_then_reminder_scheduler_sends(engine):  # type: igno
     app = create_app(Settings(database_url="sqlite:///:memory:", single_user_mode=True))
     app.dependency_overrides[get_session_factory] = lambda: sf
     app.dependency_overrides[get_llm] = lambda: fake_llm
+
+    from personal_deadline_management_agent.services.agent_response_generator import (
+        AgentResponseGenerator,
+    )
+    app.dependency_overrides[get_agent_response_generator] = lambda: AgentResponseGenerator(
+        llm=fake_llm, enable_llm=False
+    )
 
     provider = RecordingNotificationProvider()
 

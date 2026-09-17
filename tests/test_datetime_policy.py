@@ -366,10 +366,12 @@ def test_agent_naive_deadline_returns_invalid_input():
     from personal_deadline_management_agent.config import Settings
     from personal_deadline_management_agent.dependencies import (
         get_agent_interpreter,
+        get_agent_response_generator,
         get_action_validator,
         get_decision_service,
         get_resource_resolver,
         get_session_factory,
+        get_llm,
     )
     from personal_deadline_management_agent.guardrails import DecisionResult, DecisionStatus
     from personal_deadline_management_agent.main import create_app
@@ -429,6 +431,15 @@ def test_agent_naive_deadline_returns_invalid_input():
     app.dependency_overrides[get_resource_resolver] = lambda: resolver
     app.dependency_overrides[get_decision_service] = lambda: decision_service
 
+    from personal_deadline_management_agent.services.agent_response_generator import (
+        AgentResponseGenerator,
+    )
+    mock_llm = MagicMock()
+    app.dependency_overrides[get_llm] = lambda: mock_llm
+    app.dependency_overrides[get_agent_response_generator] = lambda: AgentResponseGenerator(
+        llm=mock_llm, enable_llm=False
+    )
+
     with TestClient(app) as test_client:
         response = test_client.post(
             "/api/v1/agent/chat", json={"message": "create a task"}
@@ -457,7 +468,9 @@ def test_agent_plus0700_deadline_normalized_to_utc():
         get_action_executor,
         get_action_validator,
         get_agent_interpreter,
+        get_agent_response_generator,
         get_decision_service,
+        get_llm,
         get_pending_confirmation_module,
         get_resource_resolver,
     )
@@ -518,6 +531,15 @@ def test_agent_plus0700_deadline_normalized_to_utc():
     app.dependency_overrides[get_action_validator] = lambda: validator
     app.dependency_overrides[get_resource_resolver] = lambda: resolver
     app.dependency_overrides[get_decision_service] = lambda: decision_service
+
+    from personal_deadline_management_agent.services.agent_response_generator import (
+        AgentResponseGenerator,
+    )
+    mock_llm = MagicMock()
+    app.dependency_overrides[get_llm] = lambda: mock_llm
+    app.dependency_overrides[get_agent_response_generator] = lambda: AgentResponseGenerator(
+        llm=mock_llm, enable_llm=False
+    )
 
     with TestClient(app) as test_client:
         response = test_client.post(

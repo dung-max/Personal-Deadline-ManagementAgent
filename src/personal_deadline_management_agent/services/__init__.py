@@ -3,6 +3,7 @@
 from .action_executor import ActionExecutor
 from .action_validator import ActionValidator, ValidatedAction, ValidationStatus
 from .agent_interpreter import AgentInterpreter
+from .agent_response_generator import AgentResponseGenerator
 from .authorization_service import (
     AuthorizationContext,
     AuthorizationResult,
@@ -22,6 +23,7 @@ __all__ = [
     "ActionExecutor",
     "ActionValidator",
     "AgentInterpreter",
+    "AgentResponseGenerator",
     "AuthorizationContext",
     "AuthorizationResult",
     "AuthorizationService",

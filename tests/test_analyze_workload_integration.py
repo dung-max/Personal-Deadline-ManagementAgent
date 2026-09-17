@@ -20,6 +20,7 @@ import pytest
 from personal_deadline_management_agent.guardrails import DecisionResult, DecisionStatus
 from personal_deadline_management_agent.models import Task, TaskPriority, TaskStatus
 from personal_deadline_management_agent.schemas import ActionType
+from personal_deadline_management_agent.schemas.agent import DateRangeExpression
 from personal_deadline_management_agent.schemas.workload import (
     BusyDayWarning,
     DeadlineCollision,
@@ -43,7 +44,7 @@ TASK_ID_1 = uuid4()
 TASK_ID_2 = uuid4()
 
 ANALYZE_PARAMS = {
-    "date_range_expression": "this_week",
+    "date_range_expression": "THIS_WEEK",
     "explicit_start": None,
     "explicit_end": None,
 }
@@ -187,7 +188,7 @@ def test_analyze_workload_executes_successfully(
 
     # Assert: date range resolver was called
     date_range_resolver.resolve.assert_called_once_with(
-        date_range_expression="this_week",
+        expression=DateRangeExpression.THIS_WEEK,
         explicit_start=None,
         explicit_end=None,
     )

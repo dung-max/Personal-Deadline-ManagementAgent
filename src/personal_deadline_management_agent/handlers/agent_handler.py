@@ -33,6 +33,7 @@ from ..dependencies import (
     get_action_executor,
     get_action_validator,
     get_agent_interpreter,
+    get_agent_response_generator,
     get_decision_service,
     get_pending_confirmation_module,
     get_resource_resolver,
@@ -47,9 +48,11 @@ from ..modules.pending_confirmation_module import (
 )
 from ..schemas.agent import AgentRequest, ResponseType
 from ..schemas.agent_chat import AgentChatRequest, AgentChatResponse, AgentChatStatus
+from ..schemas.agent import ActionType
 from ..services.action_executor import ActionExecutor
 from ..services.action_validator import ValidationStatus, ValidatedAction
 from ..services.agent_interpreter import AgentInterpreter
+from ..services.agent_response_generator import AgentResponseGenerator
 from ..services.authorization_service import AuthorizationContext
 from ..services.execution_command import ExecutionCommand
 from ..services.execution_result import (
@@ -97,6 +100,9 @@ def agent_chat(
     confirmation_module: PendingConfirmationModule = Depends(
         get_pending_confirmation_module
     ),
+    response_generator: AgentResponseGenerator = Depends(
+        get_agent_response_generator
+    ),
     settings: Settings = Depends(get_settings),
 ) -> AgentChatResponse:
     """Run the full Agent pipeline for a natural-language request."""
@@ -109,6 +115,7 @@ def agent_chat(
             decision_service,
             executor,
             confirmation_module,
+            response_generator,
             settings,
         )
     except Exception:
@@ -134,6 +141,7 @@ def _process(
     decision_service: DecisionService,
     executor: ActionExecutor,
     confirmation_module: PendingConfirmationModule,
+    response_generator: AgentResponseGenerator,
     settings: Settings,
 ) -> AgentChatResponse:
     # --- 0. Housekeeping: mark expired confirmations -------------------------
@@ -145,7 +153,7 @@ def _process(
     # --- a'. Confirm-intent branch -------------------------------------------
     if agent_response.response_type is ResponseType.CONFIRMATION:
         return _handle_confirmation(
-            payload, agent_response, confirmation_module, executor
+            payload, agent_response, confirmation_module, executor, response_generator
         )
 
     if agent_response.proposal is None:
@@ -185,9 +193,21 @@ def _process(
     if decision.status is DecisionStatus.AUTHORIZED:
         command = ExecutionCommand.from_decision(decision)
         execution_result = executor.execute(decision, command)
+
+        # Generate natural-language response for ANALYZE_WORKLOAD
+        message = execution_result.message
+        if (
+            execution_result.status is ExecutionStatus.EXECUTED
+            and execution_result.action_type == ActionType.ANALYZE_WORKLOAD
+        ):
+            message = response_generator.generate_response(
+                execution_result=execution_result,
+                user_message=payload.message,
+            )
+
         return AgentChatResponse(
             status=_agent_status_for(execution_result),
-            message=execution_result.message,
+            message=message,
             execution_result=execution_result,
         )
 
@@ -228,6 +248,7 @@ def _handle_confirmation(
     agent_response,
     confirmation_module: PendingConfirmationModule,
     executor: ActionExecutor,
+    response_generator: AgentResponseGenerator,
 ) -> AgentChatResponse:
     """Resolve a pending confirmation and execute the stored command."""
     confirmation_id = agent_response.confirmation_id
@@ -291,9 +312,21 @@ def _handle_confirmation(
     )
     decision = _decision_for(command)
     execution_result = executor.execute(decision, command)
+
+    # Generate natural-language response for ANALYZE_WORKLOAD
+    message = execution_result.message
+    if (
+        execution_result.status is ExecutionStatus.EXECUTED
+        and execution_result.action_type == ActionType.ANALYZE_WORKLOAD
+    ):
+        message = response_generator.generate_response(
+            execution_result=execution_result,
+            user_message=payload.message,
+        )
+
     return AgentChatResponse(
         status=_agent_status_for(execution_result),
-        message=execution_result.message,
+        message=message,
         execution_result=execution_result,
         confirmation_id=confirmation_id,
     )

@@ -20,6 +20,7 @@ from personal_deadline_management_agent.dependencies import (
     get_action_executor,
     get_action_validator,
     get_agent_interpreter,
+    get_agent_response_generator,
     get_decision_service,
     get_pending_confirmation_module,
     get_resource_resolver,
@@ -87,6 +88,7 @@ def pipeline_mocks():
         "decision_service": MagicMock(),
         "executor": MagicMock(),
         "confirmation_module": MagicMock(),
+        "response_generator": MagicMock(),
     }
 
 
@@ -110,6 +112,9 @@ def client(pipeline_mocks):
     )
     app.dependency_overrides[get_pending_confirmation_module] = (
         lambda: pipeline_mocks["confirmation_module"]
+    )
+    app.dependency_overrides[get_agent_response_generator] = (
+        lambda: pipeline_mocks["response_generator"]
     )
     with TestClient(app) as test_client:
         yield test_client
@@ -950,6 +955,7 @@ def test_confirm_race_condition_only_one_wins(tmp_path):
 def test_agent_past_deadline_returns_invalid_input_without_mutation():
     """The Agent path must enforce the deadline rule through the real
     TaskModule — a past deadline yields INVALID_INPUT and no task is created."""
+    import os
     from unittest.mock import MagicMock
 
     from sqlalchemy import create_engine
@@ -957,7 +963,13 @@ def test_agent_past_deadline_returns_invalid_input_without_mutation():
     from sqlalchemy.pool import StaticPool
 
     from genai_core.genai_shared.database import Base
-    from personal_deadline_management_agent.dependencies import get_session_factory
+    from personal_deadline_management_agent.dependencies import (
+        get_llm,
+        get_session_factory,
+    )
+
+    # Set required env var to prevent Bedrock initialization errors
+    os.environ.setdefault("BEDROCK_MODEL_ID", "test-model")
 
     engine = create_engine(
         "sqlite:///:memory:",
@@ -970,10 +982,16 @@ def test_agent_past_deadline_returns_invalid_input_without_mutation():
     app = create_app(Settings(database_url="sqlite:///:memory:"))
     app.dependency_overrides[get_session_factory] = lambda: sf
 
+    # Mock LLM to prevent Bedrock initialization
+    # The handler now has two LLM consumers: interpreter and response generator
+    mock_llm = MagicMock()
+    app.dependency_overrides[get_llm] = lambda: mock_llm
+
     interpreter = MagicMock()
     validator = MagicMock()
     resolver = MagicMock()
     decision_service = MagicMock()
+    response_generator = MagicMock()
 
     params = {"taskName": "Past Task", "deadline": "2020-01-01T00:00:00Z"}
     interpreter.interpret.return_value = AgentResponse(
@@ -998,6 +1016,7 @@ def test_agent_past_deadline_returns_invalid_input_without_mutation():
     app.dependency_overrides[get_action_validator] = lambda: validator
     app.dependency_overrides[get_resource_resolver] = lambda: resolver
     app.dependency_overrides[get_decision_service] = lambda: decision_service
+    app.dependency_overrides[get_agent_response_generator] = lambda: response_generator
 
     with TestClient(app) as test_client:
         response = test_client.post(
@@ -1017,3 +1036,278 @@ def test_agent_past_deadline_returns_invalid_input_without_mutation():
     assert rows == []
 
     engine.dispose()
+
+
+# --- PDMA-83: Response Generator Integration Tests ---------------------------
+
+
+def test_analyze_workload_calls_response_generator(client, pipeline_mocks):
+    """Successful ANALYZE_WORKLOAD calls response generator."""
+    _happy_path(pipeline_mocks)
+
+    # Override executor to return ANALYZE_WORKLOAD result
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Workload analysis completed.",
+        result_payload={
+            "total_tasks": 3,
+            "deadline_collisions": [],
+            "busy_days": [],
+            "recommended_order": [],
+            "explanation": "You have 3 active tasks.",
+        },
+    )
+
+    # Mock response generator
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "You have 3 tasks this week!"
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Show my workload"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == AgentChatStatus.EXECUTED.value
+    assert body["message"] == "You have 3 tasks this week!"
+
+    # Verify generator was called
+    pipeline_mocks["response_generator"].generate_response.assert_called_once()
+    call_kwargs = pipeline_mocks["response_generator"].generate_response.call_args.kwargs
+    assert call_kwargs["execution_result"].action_type == ActionType.ANALYZE_WORKLOAD
+    assert call_kwargs["user_message"] == "Show my workload"
+
+
+def test_analyze_workload_generated_response_becomes_message(client, pipeline_mocks):
+    """Generated response becomes AgentChatResponse.message."""
+    _happy_path(pipeline_mocks)
+
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Original message",
+        result_payload={"total_tasks": 5, "explanation": "5 tasks"},
+    )
+
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "Custom generated response"
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Analyze workload"},
+    )
+
+    body = response.json()
+    assert body["message"] == "Custom generated response"
+    assert body["message"] != "Original message"
+
+
+def test_analyze_workload_preserves_execution_result(client, pipeline_mocks):
+    """Original execution_result is preserved unchanged."""
+    _happy_path(pipeline_mocks)
+
+    original_result = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Original message",
+        result_payload={"total_tasks": 7, "explanation": "7 tasks"},
+    )
+    pipeline_mocks["executor"].execute.return_value = original_result
+
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "Generated response"
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Show workload"},
+    )
+
+    body = response.json()
+    # execution_result unchanged
+    assert body["execution_result"]["actionType"] == "ANALYZE_WORKLOAD"
+    assert body["execution_result"]["message"] == "Original message"
+    assert body["execution_result"]["resultPayload"]["total_tasks"] == 7
+
+
+def test_non_workload_action_keeps_original_message(client, pipeline_mocks):
+    """Non-ANALYZE_WORKLOAD action does not call generator."""
+    _happy_path(pipeline_mocks)
+
+    # CREATE_TASK action
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.CREATE_TASK,
+        message="Task created successfully.",
+        result_id=uuid4(),
+        result_name="New Task",
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Create a task"},
+    )
+
+    body = response.json()
+    assert body["message"] == "Task created successfully."
+
+    # Generator NOT called
+    pipeline_mocks["response_generator"].generate_response.assert_not_called()
+
+
+def test_early_return_paths_do_not_call_generator(client, pipeline_mocks):
+    """Early-return paths (clarification, rejection, etc.) do not call generator."""
+    # Interpreter returns CLARIFICATION_REQUIRED
+    pipeline_mocks["interpreter"].interpret.return_value = AgentResponse(
+        response_type=ResponseType.CLARIFICATION_REQUIRED,
+        message="Please clarify your request.",
+        proposal=None,
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "unclear request"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == AgentChatStatus.CLARIFICATION_REQUIRED.value
+
+    # Generator NOT called
+    pipeline_mocks["response_generator"].generate_response.assert_not_called()
+
+
+def test_confirmation_execution_calls_generator_for_analyze_workload(client, pipeline_mocks):
+    """Confirmation execution calls generator for ANALYZE_WORKLOAD."""
+    confirmation_id = uuid4()
+    stored_command = ExecutionCommand(
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        parameters={
+            "date_range_expression": "THIS_WEEK",
+            "explicit_start": None,
+            "explicit_end": None,
+        },
+    )
+
+    pipeline_mocks["confirmation_module"].confirm.return_value = ConfirmResult(
+        outcome=ConfirmOutcome.CONFIRMED,
+        confirmation=SimpleNamespace(
+            id=confirmation_id,
+            status=PendingConfirmationStatus.CONFIRMED.value,
+            execution_command=stored_command.model_dump_json(),
+        ),
+    )
+
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Workload analysis completed.",
+        result_payload={"total_tasks": 2, "explanation": "2 tasks"},
+    )
+
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "You have 2 tasks confirmed!"
+    )
+
+    pipeline_mocks["interpreter"].interpret.return_value = AgentResponse(
+        response_type=ResponseType.CONFIRMATION,
+        message="",
+        proposal=None,
+        confirmation_id=confirmation_id,
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "yes"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == AgentChatStatus.EXECUTED.value
+    assert body["message"] == "You have 2 tasks confirmed!"
+
+    # Generator called
+    pipeline_mocks["response_generator"].generate_response.assert_called_once()
+
+
+def test_generator_failure_does_not_cause_action_re_execution(client, pipeline_mocks):
+    """Generator fallback/failure does not cause action re-execution."""
+    _happy_path(pipeline_mocks)
+
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Fallback message",
+        result_payload={"total_tasks": 1},
+    )
+
+    # Generator returns fallback (simulating LLM failure handled internally)
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "Fallback message"
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Show workload"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == AgentChatStatus.EXECUTED.value
+
+    # Action executed exactly once
+    pipeline_mocks["executor"].execute.assert_called_once()
+
+
+def test_action_executor_called_exactly_once_with_generator(client, pipeline_mocks):
+    """Action executor is called exactly once even with response generation."""
+    _happy_path(pipeline_mocks)
+
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Analysis complete",
+        result_payload={"total_tasks": 4},
+    )
+
+    pipeline_mocks["response_generator"].generate_response.return_value = (
+        "Generated response"
+    )
+
+    client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Analyze my workload"},
+    )
+
+    # Executor called exactly once
+    assert pipeline_mocks["executor"].execute.call_count == 1
+
+
+def test_failed_execution_does_not_call_generator(client, pipeline_mocks):
+    """Failed execution does not call response generator."""
+    _happy_path(pipeline_mocks)
+
+    pipeline_mocks["executor"].execute.return_value = ExecutionResult(
+        status=ExecutionStatus.EXECUTION_FAILED,
+        action_type=ActionType.ANALYZE_WORKLOAD,
+        message="Analysis failed",
+        error_code=ExecutionErrorCode.INFRASTRUCTURE,
+    )
+
+    response = client.post(
+        "/api/v1/agent/chat",
+        json={"message": "Show workload"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == AgentChatStatus.ERROR.value
+    assert body["message"] == "Analysis failed"
+
+    # Generator NOT called on failed execution
+    pipeline_mocks["response_generator"].generate_response.assert_not_called()
+

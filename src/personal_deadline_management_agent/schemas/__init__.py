@@ -13,6 +13,7 @@ from .agent import (
     ResponseType,
 )
 from .agent_chat import AgentChatRequest, AgentChatResponse, AgentChatStatus
+from .agent_response_generation import AgentResponseOutput
 from .reminder import (
     ReminderCreateRequest,
     ReminderResponseData,
@@ -41,6 +42,7 @@ __all__ = [
     "AgentChatStatus",
     "AgentRequest",
     "AgentResponse",
+    "AgentResponseOutput",
     "BusyDayWarning",
     "DateRangeExpression",
     "DeadlineCollision",
