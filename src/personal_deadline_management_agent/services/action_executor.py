@@ -38,7 +38,8 @@ from ..models import TaskPriority
 from ..modules.reminder_module import ReminderModule
 from ..modules.task_module import TaskModule
 from ..schemas.agent import ActionType
-from ..schemas.workload import WorkloadAnalysisResult
+from ..schemas.workload import ReschedulingResult, WorkloadAnalysisResult
+from ..services.rescheduling_suggestion_service import ReschedulingSuggestionService
 from ..utils.datetime_utils import (
     NaiveDateTimeError,
     parse_iso_datetime,
@@ -128,11 +129,15 @@ class ActionExecutor:
         reminder_module: ReminderModule,
         workload_analysis_service: WorkloadAnalysisService | None = None,
         date_range_resolver: DateRangeResolver | None = None,
+        rescheduling_suggestion_service: ReschedulingSuggestionService | None = None,
     ) -> None:
         self._tasks = task_module
         self._reminders = reminder_module
         self._workload_service = workload_analysis_service or WorkloadAnalysisService()
         self._date_resolver = date_range_resolver or DateRangeResolver()
+        self._rescheduling_suggestion_service = (
+            rescheduling_suggestion_service or ReschedulingSuggestionService()
+        )
 
     def execute(
         self,
@@ -264,6 +269,27 @@ class ActionExecutor:
             tasks = self._tasks.find_tasks_by_deadline_range(start, end)
             # Delegate analysis to the workload service
             return self._workload_service.analyze(tasks)
+        if action is ActionType.SUGGEST_RESCHEDULING:
+            # Resolve date range from parameters (same logic as ANALYZE_WORKLOAD)
+            from ..schemas.agent import DateRangeExpression
+
+            # Convert string expression to enum
+            expr_str = params["date_range_expression"]
+            expression = DateRangeExpression(expr_str) if isinstance(expr_str, str) else expr_str
+
+            # Convert ISO string dates to datetime if present
+            explicit_start = _opt_datetime(params.get("explicit_start"))
+            explicit_end = _opt_datetime(params.get("explicit_end"))
+
+            start, end = self._date_resolver.resolve(
+                expression=expression,
+                explicit_start=explicit_start,
+                explicit_end=explicit_end,
+            )
+            # Query tasks in the resolved range
+            tasks = self._tasks.find_tasks_by_deadline_range(start, end)
+            # Delegate to rescheduling suggestion service
+            return self._rescheduling_suggestion_service.suggest_rescheduling(tasks)
         # Unsupported action type — should never reach here when gated by
         # SafetyPolicy, but fail safely if it does.
         raise ValueError(f"Unsupported action type: {action}")
@@ -272,13 +298,15 @@ class ActionExecutor:
 
     def _executed(self, command: ExecutionCommand, entity: Any) -> ExecutionResult:
         """Build the EXECUTED result with the minimal safe payload."""
-        # Special handling for ANALYZE_WORKLOAD result
-        if isinstance(entity, WorkloadAnalysisResult):
+        # Special handling for analysis results
+        if isinstance(entity, (WorkloadAnalysisResult, ReschedulingResult)):
             return ExecutionResult(
                 status=ExecutionStatus.EXECUTED,
                 action_type=command.action_type,
                 resource_id=command.resource_id,
-                message="Workload analysis completed successfully.",
+                message="Workload analysis completed successfully."
+                if isinstance(entity, WorkloadAnalysisResult)
+                else "Rescheduling suggestions generated successfully.",
                 result_payload=entity.model_dump(by_alias=True),
             )
 

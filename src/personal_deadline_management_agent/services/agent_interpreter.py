@@ -52,6 +52,7 @@ Supported action types:
   UPDATE_REMINDER — update an existing reminder
   DELETE_REMINDER — delete an existing reminder
   ANALYZE_WORKLOAD — analyze the user's workload for a specified date range
+  SUGGEST_RESCHEDULING — suggest deterministic candidate rescheduling windows
 
 Return your interpretation as structured JSON matching the required output schema.
 
@@ -60,7 +61,7 @@ Rules:
 - For UPDATE_TASK, DELETE_TASK, UPDATE_REMINDER, DELETE_REMINDER you MUST \
 identify the target resource.
 - For CREATE_REMINDER you MUST identify the parent task.
-- CREATE_TASK and ANALYZE_WORKLOAD have no target resource — never set resource_id or \
+- CREATE_TASK, ANALYZE_WORKLOAD and SUGGEST_RESCHEDULING have no target resource — never set resource_id or \
 resource_description for them; for CREATE_TASK put the new task's name in \
 parameters.taskName.
 - If the user provides an explicit UUID, set resource_id to that UUID as a string.
@@ -71,7 +72,9 @@ only set resource_id when the user explicitly gave one.
 For tasks include: taskName, description, deadline, priority. \
 For reminders include: remindAt and optionally taskId (if a UUID was given). \
 For ANALYZE_WORKLOAD include: date_range_expression (required), and if the \
-expression is "EXPLICIT_RANGE", also include explicit_start and explicit_end.
+expression is "EXPLICIT_RANGE", also include explicit_start and explicit_end. \
+For SUGGEST_RESCHEDULING include: date_range_expression (same as ANALYZE_WORKLOAD), \
+and if the expression is "EXPLICIT_RANGE", also include explicit_start and explicit_end.
 - Use ISO 8601 for date/time values.
 - For ANALYZE_WORKLOAD, map the user's date reference to a semantic \
 date_range_expression. NEVER calculate actual date boundaries — only identify \
@@ -86,6 +89,16 @@ the semantic keyword:
 and explicit_end as ISO 8601).
   Do NOT calculate which actual dates "this week" corresponds to — the application \
 will resolve the semantic expression deterministically.
+- For SUGGEST_RESCHEDULING, map natural language requests for rescheduling suggestions:
+  "suggest when I should reschedule" → SUGGEST_RESCHEDULING
+  "which tasks should I move" → SUGGEST_RESCHEDULING
+  "can you suggest alternative times" → SUGGEST_RESCHEDULING
+  "how can I rearrange my workload" → SUGGEST_RESCHEDULING
+  "where could I fit my overloaded tasks" → SUGGEST_RESCHEDULING
+  "gợi ý thời gian để sắp xếp lại" → SUGGEST_RESCHEDULING
+  "những task nào nên dời" → SUGGEST_RESCHEDULING
+  Use the same date_range_expression logic as ANALYZE_WORKLOAD (default to THIS_WEEK \
+if no specific range is mentioned).
 - If the request is ambiguous or missing information required for the action, \
 use NEEDS_CLARIFICATION with a brief message explaining what is needed.
 - If the request does not correspond to any supported action, use REJECTED \
@@ -182,7 +195,7 @@ class AgentInterpreter:
             )
 
         # CREATE_TASK and ANALYZE_WORKLOAD have no target resource.
-        if output.action_type in {ActionType.CREATE_TASK, ActionType.ANALYZE_WORKLOAD}:
+        if output.action_type in {ActionType.CREATE_TASK, ActionType.ANALYZE_WORKLOAD, ActionType.SUGGEST_RESCHEDULING}:
             resource: ResourceReference | None = None
         else:
             try:

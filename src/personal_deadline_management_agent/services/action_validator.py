@@ -82,6 +82,7 @@ _RESOURCE_REQUIRED_ACTIONS = {
 _NO_RESOURCE_ACTIONS = {
     ActionType.CREATE_TASK,
     ActionType.ANALYZE_WORKLOAD,
+    ActionType.SUGGEST_RESCHEDULING,
 }
 
 # Minimal structural parameter requirements per action.  Only the presence of
@@ -91,6 +92,7 @@ _REQUIRED_PARAMETERS: dict[ActionType, set[str]] = {
     ActionType.CREATE_TASK: {"taskName", "deadline"},
     ActionType.CREATE_REMINDER: {"remindAt"},
     ActionType.ANALYZE_WORKLOAD: {"date_range_expression"},
+    ActionType.SUGGEST_RESCHEDULING: {"date_range_expression"},
 }
 
 # Update actions must change at least one field.
@@ -148,8 +150,8 @@ class ActionValidator:
                 message="An update action must change at least one field.",
             )
 
-        # --- ANALYZE_WORKLOAD semantic validation ---------------------------
-        if proposal.action_type == ActionType.ANALYZE_WORKLOAD:
+        # --- ANALYZE_WORKLOAD / SUGGEST_RESCHEDULING semantic validation ----
+        if proposal.action_type in {ActionType.ANALYZE_WORKLOAD, ActionType.SUGGEST_RESCHEDULING}:
             return self._validate_analyze_workload(proposal.parameters)
 
         return ValidationResult(status=ValidationStatus.VALID)

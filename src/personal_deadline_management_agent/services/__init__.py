@@ -14,6 +14,9 @@ from .date_range_resolver import DateRangeResolver
 from .execution_command import ExecutionCommand
 from .execution_result import ExecutionErrorCode, ExecutionResult, ExecutionStatus
 from .reminder_service import ReminderService
+from .rescheduling_candidate_service import ReschedulingCandidateService
+from .rescheduling_constraint_service import ReschedulingConstraintService
+from .rescheduling_suggestion_service import ReschedulingSuggestionService
 from .resource_resolver import ResourceResolver
 from .scheduler_service import SchedulerService, TickResult
 from .task_service import TaskService
@@ -34,6 +37,9 @@ __all__ = [
     "ExecutionResult",
     "ExecutionStatus",
     "ReminderService",
+    "ReschedulingCandidateService",
+    "ReschedulingConstraintService",
+    "ReschedulingSuggestionService",
     "ResourceResolver",
     "SchedulerService",
     "TaskService",

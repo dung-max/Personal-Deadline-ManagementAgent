@@ -69,8 +69,11 @@ class AgentResponseGenerator:
             Natural-language response string. Falls back to deterministic
             template if LLM generation fails or is disabled.
         """
-        # Only generate for ANALYZE_WORKLOAD
-        if execution_result.action_type != ActionType.ANALYZE_WORKLOAD:
+        # Only generate for ANALYZE_WORKLOAD and SUGGEST_RESCHEDULING
+        if execution_result.action_type not in {
+            ActionType.ANALYZE_WORKLOAD,
+            ActionType.SUGGEST_RESCHEDULING,
+        }:
             return execution_result.message
 
         # Skip LLM if disabled or no result_payload
@@ -80,7 +83,7 @@ class AgentResponseGenerator:
         try:
             language = self._detect_language(user_message, language_hint)
             system_prompt = self._build_system_prompt(
-                language, execution_result.result_payload
+                language, execution_result.result_payload, execution_result.action_type
             )
 
             output: AgentResponseOutput = self._llm.generate(
@@ -116,8 +119,27 @@ class AgentResponseGenerator:
             return "vi"
         return "en"
 
-    def _build_system_prompt(self, language: str, result_payload: dict[str, Any]) -> str:
+    def _build_system_prompt(
+        self, language: str, result_payload: dict[str, Any], action_type: ActionType
+    ) -> str:
         """Build system prompt with structured facts from result_payload.
+
+        Args:
+            language: Detected language ("en" or "vi")
+            result_payload: WorkloadAnalysisResult or ReschedulingResult as dict
+            action_type: The action type being responded to
+
+        Returns:
+            System prompt string with instructions and structured facts
+        """
+        if action_type == ActionType.SUGGEST_RESCHEDULING:
+            return self._build_rescheduling_prompt(language, result_payload)
+        return self._build_workload_prompt(language, result_payload)
+
+    def _build_workload_prompt(
+        self, language: str, result_payload: dict[str, Any]
+    ) -> str:
+        """Build system prompt for workload analysis response.
 
         Args:
             language: Detected language ("en" or "vi")
@@ -190,6 +212,100 @@ STRUCTURED FACTS:
 
 Generate a natural-language response that explains these facts clearly and helpfully."""
 
+    def _build_rescheduling_prompt(
+        self, language: str, result_payload: dict[str, Any]
+    ) -> str:
+        """Build system prompt for rescheduling suggestions response.
+
+        Args:
+            language: Detected language ("en" or "vi")
+            result_payload: ReschedulingResult as dict
+
+        Returns:
+            System prompt string with instructions and structured facts
+        """
+        language_name = "English" if language == "en" else "Vietnamese"
+
+        # Extract rescheduling facts
+        suggestions = result_payload.get("suggestions", [])
+        unscheduled = result_payload.get("unscheduledTasks", [])
+        overloaded_days = result_payload.get("overloadedDays", [])
+
+        # Build structured facts with complete details
+        facts = [
+            f"- Total suggestions generated: {len(suggestions)}",
+            f"- Tasks that could not be scheduled: {len(unscheduled)}",
+        ]
+
+        if overloaded_days:
+            facts.append(f"- Days with capacity constraints: {len(overloaded_days)}")
+
+        # Show detailed suggestion facts
+        if suggestions:
+            facts.append("\nFEASIBLE CANDIDATE WINDOWS:")
+            for i, sug in enumerate(suggestions[:5], 1):
+                task_name = sug.get("taskName", "")
+                task_id = sug.get("taskId", "")
+                duration = sug.get("durationMinutes", 0)
+                deadline = sug.get("currentDeadline", "")
+                slot = sug.get("candidateSlot", {})
+                slot_start = slot.get("start", "")
+                slot_end = slot.get("end", "")
+                reason = sug.get("reason", "")
+
+                facts.append(
+                    f"{i}. {task_name} ({duration} minutes, deadline: {deadline})\n"
+                    f"   Candidate: {slot_start} to {slot_end}\n"
+                    f"   Reason: {reason}"
+                )
+
+            if len(suggestions) > 5:
+                facts.append(f"   ... and {len(suggestions) - 5} more suggestions")
+
+        # Show unscheduled task details
+        if unscheduled:
+            facts.append("\nCOULD NOT SCHEDULE:")
+            for i, task in enumerate(unscheduled[:3], 1):
+                name = task.get("taskName", "")
+                duration = task.get("durationMinutes", "unknown")
+                deadline = task.get("deadline", "no deadline")
+                facts.append(f"{i}. {name} ({duration} min, {deadline})")
+
+            if len(unscheduled) > 3:
+                facts.append(f"   ... and {len(unscheduled) - 3} more")
+
+        facts_text = "\n".join(facts)
+
+        return f"""You are a response generator for a personal deadline management assistant.
+
+Respond in {language_name}.
+
+Explain the rescheduling suggestions in a conversational, helpful tone.
+
+CRITICAL CONSTRAINTS - DO NOT VIOLATE:
+- Use ONLY the facts provided below. Never invent times, dates, tasks, or availability.
+- Do not recalculate anything. Use exact counts and times from the structured facts.
+- Do not claim tasks were rescheduled or moved — these are SUGGESTIONS only.
+- Do not claim calendar availability — these are CANDIDATE WINDOWS based on constraints.
+- Do not recommend actions beyond what the structured facts show.
+- Do not mention system internals, algorithms, or implementation details.
+
+TERMINOLOGY:
+- Use "candidate window" or "feasible slot" NOT "free time" or "available time"
+- Use "suggestion" NOT "scheduled" or "confirmed"
+- Use "could not find a feasible candidate" NOT "impossible" or "blocked"
+
+TONE:
+- Keep response under 500 characters if possible
+- Be conversational and helpful
+- Prioritize most urgent or important information
+- If many suggestions, summarize rather than listing all
+
+STRUCTURED FACTS:
+{facts_text}
+
+Generate a natural-language response explaining these rescheduling suggestions clearly and accurately."""
+
     def _fallback_template(self, execution_result: ExecutionResult) -> str:
         """Deterministic template when LLM unavailable.
 
@@ -199,6 +315,9 @@ Generate a natural-language response that explains these facts clearly and helpf
         Returns:
             Deterministic message string
         """
+        if execution_result.action_type == ActionType.SUGGEST_RESCHEDULING:
+            return self._rescheduling_fallback(execution_result)
+
         if execution_result.result_payload:
             # Use WorkloadAnalysisService.explanation field
             explanation = execution_result.result_payload.get("explanation", "")
@@ -207,3 +326,56 @@ Generate a natural-language response that explains these facts clearly and helpf
 
         # Final fallback
         return execution_result.message
+
+    def _rescheduling_fallback(self, execution_result: ExecutionResult) -> str:
+        """Deterministic fallback for SUGGEST_RESCHEDULING.
+
+        Produces a structured summary using only deterministic facts.
+        Never invents scheduling facts.
+        """
+        payload = execution_result.result_payload or {}
+        suggestions = payload.get("suggestions", [])
+        unscheduled = payload.get("unscheduledTasks", [])
+        overloaded_days = payload.get("overloadedDays", [])
+
+        lines: list[str] = []
+
+        if not suggestions and not unscheduled:
+            lines.append("No rescheduling analysis needed for the selected range.")
+
+        elif not suggestions:
+            lines.append(
+                "No feasible candidate windows found for "
+                f"{len(unscheduled)} task(s) under current constraints."
+            )
+        else:
+            lines.append(
+                f"Found {len(suggestions)} feasible rescheduling suggestion"
+                f"{'s' if len(suggestions) != 1 else ''}."
+            )
+            for sug in suggestions[:5]:
+                name = sug.get("taskName", "Task")
+                slot = sug.get("candidateSlot", {})
+                slot_start = slot.get("start", "")
+                slot_end = slot.get("end", "")
+                if slot_start and slot_end:
+                    lines.append(f"- {name}: candidate window {slot_start} to {slot_end}")
+
+        if unscheduled:
+            lines.append(
+                f"{len(unscheduled)} task(s) could not be assigned a feasible "
+                "candidate under current constraints."
+            )
+
+        if overloaded_days:
+            day_count = len(overloaded_days)
+            lines.append(
+                f"{day_count} day(s) have planned work exceeding the daily budget."
+            )
+
+        lines.append(
+            "\nNote: These are suggestions based on known constraints. "
+            "Candidate windows are not confirmed calendar availability."
+        )
+
+        return "\n".join(lines)

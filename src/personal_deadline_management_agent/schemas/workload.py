@@ -7,6 +7,7 @@ pure data contracts — no business logic, no database access.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -96,6 +97,49 @@ class SchedulingPressure(BaseModel):
     task_b_name: str = Field(alias="taskBName")
     overlap_start: datetime = Field(alias="overlapStart")
     overlap_end: datetime = Field(alias="overlapEnd")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CandidateSlot(BaseModel):
+    """A possible time slot where a task could be scheduled."""
+
+    start: datetime
+    end: datetime
+    available_minutes: int = Field(gt=0, alias="availableMinutes")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @property
+    def duration_minutes(self) -> int:
+        """Computed duration from start to end."""
+        delta = self.end - self.start
+        return int(delta.total_seconds() / 60)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.end <= self.start:
+            raise ValueError("CandidateSlot end must be after start")
+
+
+class ReschedulingSuggestion(BaseModel):
+    """A recommendation to reschedule a specific task to a candidate slot."""
+
+    task_id: UUID = Field(alias="taskId")
+    task_name: str = Field(alias="taskName")
+    duration_minutes: int = Field(gt=0, alias="durationMinutes")
+    current_deadline: datetime = Field(alias="currentDeadline")
+    candidate_slot: CandidateSlot = Field(alias="candidateSlot")
+    reason: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ReschedulingResult(BaseModel):
+    """Result of rescheduling analysis containing suggestions and unscheduled tasks."""
+
+    suggestions: list[ReschedulingSuggestion] = Field(default_factory=list)
+    overloaded_days: list[date] = Field(default_factory=list, alias="overloadedDays")
+    unscheduled_tasks: list[TaskSummary] = Field(default_factory=list, alias="unscheduledTasks")
 
     model_config = ConfigDict(populate_by_name=True)
 

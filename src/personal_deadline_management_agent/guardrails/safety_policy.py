@@ -55,6 +55,7 @@ SUPPORTED_ACTIONS = frozenset(
         ActionType.UPDATE_REMINDER,
         ActionType.DELETE_REMINDER,
         ActionType.ANALYZE_WORKLOAD,
+        ActionType.SUGGEST_RESCHEDULING,
     }
 )
 

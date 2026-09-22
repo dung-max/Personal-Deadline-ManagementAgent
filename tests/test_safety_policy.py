@@ -58,6 +58,7 @@ def test_supported_actions_are_the_mvp_actions():
         ActionType.UPDATE_REMINDER,
         ActionType.DELETE_REMINDER,
         ActionType.ANALYZE_WORKLOAD,
+        ActionType.SUGGEST_RESCHEDULING,
     }
 
 
@@ -85,6 +86,7 @@ def test_decision_result_has_no_execute_method(policy: SafetyPolicy):
         ActionType.CREATE_REMINDER,
         ActionType.UPDATE_REMINDER,
         ActionType.ANALYZE_WORKLOAD,
+        ActionType.SUGGEST_RESCHEDULING,
     ],
 )
 def test_non_destructive_supported_actions_are_authorized(

@@ -29,6 +29,7 @@ class ActionType(str, enum.Enum):
     UPDATE_REMINDER = "UPDATE_REMINDER"
     DELETE_REMINDER = "DELETE_REMINDER"
     ANALYZE_WORKLOAD = "ANALYZE_WORKLOAD"
+    SUGGEST_RESCHEDULING = "SUGGEST_RESCHEDULING"
 
 
 class DateRangeExpression(str, enum.Enum):
