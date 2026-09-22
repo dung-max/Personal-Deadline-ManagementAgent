@@ -105,7 +105,7 @@ def test_migration_0002_alembic_version_is_0002():
     cfg = _alembic_config()
     with engine.begin() as connection:
         cfg.attributes["connection"] = connection
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0002")
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
         assert version == "0002"
     engine.dispose()

@@ -39,22 +39,22 @@ def workload_execution_result():
         action_type=ActionType.ANALYZE_WORKLOAD,
         message="Workload analysis completed.",
         result_payload={
-            "total_tasks": 5,
-            "deadline_collisions": [
+            "totalTasks": 5,
+            "deadlineCollisions": [
                 {
                     "deadline": "2026-09-20T10:00:00Z",
                     "tasks": [
-                        {"task_name": "Task A", "priority": "HIGH"},
-                        {"task_name": "Task B", "priority": "HIGH"},
+                        {"taskName": "Task A", "priority": "HIGH"},
+                        {"taskName": "Task B", "priority": "HIGH"},
                     ],
                 }
             ],
-            "busy_days": [
-                {"date": "2026-09-18", "task_count": 6, "tasks": []},
+            "busyDays": [
+                {"date": "2026-09-18", "taskCount": 6, "tasks": []},
             ],
-            "recommended_order": [
-                {"task_name": "Task A"},
-                {"task_name": "Task B"},
+            "recommendedOrder": [
+                {"taskName": "Task A"},
+                {"taskName": "Task B"},
             ],
             "explanation": "You have 5 active tasks. 1 deadline collision detected.",
         },

@@ -116,6 +116,7 @@ def test_create_task_routes_to_task_module(executor, task_module):
         description="Draft the quarterly report",
         deadline=datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc),
         priority=TaskPriority.HIGH,
+        duration_minutes=None,
     )
 
 

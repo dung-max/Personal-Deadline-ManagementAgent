@@ -20,12 +20,14 @@ from .exceptions.reminder import InvalidReminderError, ReminderNotFoundError
 from .exceptions.task import InvalidTaskError, TaskNotFoundError
 from .handlers import agent_handler, health, reminder_handler, task_handler
 from .models import PendingConfirmation, Reminder, Task  # noqa: F401 — register models with Base.metadata
+from .observability import CorrelationMiddleware, configure_logging, correlation_context
 
 logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_config()
+    configure_logging(settings.environment)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -46,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.add_middleware(CorrelationMiddleware)
 
     @app.exception_handler(TaskNotFoundError)
     async def task_not_found_exception_handler(
@@ -138,12 +141,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def unhandled_exception_handler(
         request: Request, exc: Exception
     ) -> JSONResponse:
-        logger.exception(
-            "Unhandled exception: %s %s",
-            request.method,
-            request.url.path,
-        )
-        return JSONResponse(
+        correlation_id = request.state.correlation_id
+        with correlation_context(correlation_id):
+            logger.exception(
+                "Unhandled exception: %s %s",
+                request.method,
+                request.url.path,
+            )
+        response = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "success": False,
@@ -154,6 +159,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
             },
         )
+        response.headers["X-Correlation-ID"] = request.state.correlation_id
+        return response
 
     app.include_router(health.router)
     app.include_router(task_handler.router)

@@ -37,6 +37,7 @@ def create_task(
         description=payload.description,
         deadline=payload.deadline,
         priority=payload.priority,
+        duration_minutes=payload.duration_minutes,
     )
     return SuccessResponse(
         message="Task created successfully",
@@ -87,6 +88,8 @@ def update_task(
         update_kwargs["task_name"] = payload.task_name
     if "description" in payload.model_fields_set:
         update_kwargs["description"] = payload.description
+    if "duration_minutes" in payload.model_fields_set:
+        update_kwargs["duration_minutes"] = payload.duration_minutes
     if "deadline" in payload.model_fields_set:
         update_kwargs["deadline"] = payload.deadline
     if "priority" in payload.model_fields_set:

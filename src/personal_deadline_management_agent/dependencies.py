@@ -28,6 +28,7 @@ from .services.agent_interpreter import AgentInterpreter
 from .services.agent_response_generator import AgentResponseGenerator
 from .services.authorization_service import AuthorizationService
 from .services.resource_resolver import ResourceResolver
+from .services.workload_analysis_service import WorkloadAnalysisService
 from .uow import UnitOfWork
 
 
@@ -162,8 +163,19 @@ def get_decision_service(
 # --- Execution ---------------------------------------------------------------
 
 
+def get_workload_analysis_service(
+    settings: Settings = Depends(get_settings),
+) -> WorkloadAnalysisService:
+    return WorkloadAnalysisService(budget_minutes=settings.daily_working_minutes)
+
+
 def get_action_executor(
     task_module: TaskModule = Depends(get_task_module),
     reminder_module: ReminderModule = Depends(get_reminder_module),
+    workload_analysis_service: WorkloadAnalysisService = Depends(get_workload_analysis_service),
 ) -> ActionExecutor:
-    return ActionExecutor(task_module=task_module, reminder_module=reminder_module)
+    return ActionExecutor(
+        task_module=task_module,
+        reminder_module=reminder_module,
+        workload_analysis_service=workload_analysis_service,
+    )

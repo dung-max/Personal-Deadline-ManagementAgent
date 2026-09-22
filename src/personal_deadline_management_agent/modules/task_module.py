@@ -26,6 +26,7 @@ class TaskModule:
         description: str | None,
         deadline: datetime,
         priority: TaskPriority,
+        duration_minutes: int | None = None,
     ) -> Task:
         try:
             result = self._service.create_task(
@@ -33,6 +34,7 @@ class TaskModule:
                 description=description,
                 deadline=deadline,
                 priority=priority,
+                duration_minutes=duration_minutes,
             )
             self._uow.commit()
             return result
@@ -54,6 +56,7 @@ class TaskModule:
         deadline: datetime | None = None,
         priority: TaskPriority | None = None,
         status: TaskStatus | None = None,
+        duration_minutes: object = _UNSET,
     ) -> Task:
         try:
             result = self._service.update_task(
@@ -63,6 +66,7 @@ class TaskModule:
                 deadline=deadline,
                 priority=priority,
                 status=status,
+                duration_minutes=duration_minutes,
             )
             self._uow.commit()
             return result

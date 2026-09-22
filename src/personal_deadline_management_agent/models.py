@@ -11,7 +11,7 @@ import enum
 import uuid
 
 from datetime import datetime, timezone
-from sqlalchemy import UUID, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import UUID, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from genai_core.genai_shared.database import Base
@@ -65,6 +65,9 @@ class Task(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     deadline: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+    duration_minutes: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
     )
     priority: Mapped[str] = mapped_column(
         String, nullable=False, default=TaskPriority.MEDIUM.value

@@ -282,11 +282,11 @@ class TestE2ENaturalLanguageWorkloadRequest:
             assert er["actionType"] == ActionType.ANALYZE_WORKLOAD.value
             payload = er["resultPayload"]
             assert payload is not None
-            # WorkloadAnalysisResult shape
-            assert "total_tasks" in payload
-            assert "deadline_collisions" in payload
-            assert "busy_days" in payload
-            assert "recommended_order" in payload
+            # WorkloadAnalysisResult shape — keys use camelCase aliases
+            assert "totalTasks" in payload
+            assert "deadlineCollisions" in payload
+            assert "busyDays" in payload
+            assert "recommendedOrder" in payload
             assert "explanation" in payload
             engine2.dispose()
         finally:
@@ -359,9 +359,9 @@ class TestE2EToday:
             # the pipeline executed and returned a well-formed payload.
             assert body["status"] == AgentChatStatus.EXECUTED.value
             payload = body["execution_result"]["resultPayload"]
-            assert isinstance(payload["total_tasks"], int)
-            assert isinstance(payload["deadline_collisions"], list)
-            assert isinstance(payload["busy_days"], list)
+            assert isinstance(payload["totalTasks"], int)
+            assert isinstance(payload["deadlineCollisions"], list)
+            assert isinstance(payload["busyDays"], list)
         finally:
             engine.dispose()
 
@@ -404,8 +404,8 @@ class TestE2EExplicitRange:
             assert body["status"] == AgentChatStatus.EXECUTED.value
             payload = body["execution_result"]["resultPayload"]
             # Only the two inside tasks are active and in range
-            assert payload["total_tasks"] == 2
-            names = {t["task_name"] for t in payload["recommended_order"]}
+            assert payload["totalTasks"] == 2
+            names = {t["taskName"] for t in payload["recommendedOrder"]}
             assert names == {"Inside 1", "Inside 2"}
             assert "Outside" not in names
 
@@ -441,10 +441,10 @@ class TestE2EEmptyWorkload:
             body = resp.json()
             assert body["status"] == AgentChatStatus.EXECUTED.value
             payload = body["execution_result"]["resultPayload"]
-            assert payload["total_tasks"] == 0
-            assert payload["deadline_collisions"] == []
-            assert payload["busy_days"] == []
-            assert payload["recommended_order"] == []
+            assert payload["totalTasks"] == 0
+            assert payload["deadlineCollisions"] == []
+            assert payload["busyDays"] == []
+            assert payload["recommendedOrder"] == []
             assert isinstance(payload["explanation"], str)
             assert len(payload["explanation"]) > 0
         finally:
@@ -490,10 +490,10 @@ class TestE2ECollisionThroughPipeline:
             body = resp.json()
             assert body["status"] == AgentChatStatus.EXECUTED.value
             payload = body["execution_result"]["resultPayload"]
-            collisions = payload["deadline_collisions"]
+            collisions = payload["deadlineCollisions"]
             assert len(collisions) == 1
             assert len(collisions[0]["tasks"]) == 2
-            names = {t["task_name"] for t in collisions[0]["tasks"]}
+            names = {t["taskName"] for t in collisions[0]["tasks"]}
             assert names == {"Collide A", "Collide B"}
         finally:
             engine.dispose()
@@ -531,9 +531,9 @@ class TestE2EBusyDayThroughPipeline:
             body = resp.json()
             assert body["status"] == AgentChatStatus.EXECUTED.value
             payload = body["execution_result"]["resultPayload"]
-            assert len(payload["busy_days"]) == 1
-            assert payload["busy_days"][0]["task_count"] == 6
-            assert payload["busy_days"][0]["date"] == "2026-09-18"
+            assert len(payload["busyDays"]) == 1
+            assert payload["busyDays"][0]["taskCount"] == 6
+            assert payload["busyDays"][0]["date"] == "2026-09-18"
         finally:
             engine.dispose()
 
@@ -559,7 +559,7 @@ class TestE2EBusyDayThroughPipeline:
             )
             resp = _agent_post(app, "Analyze my workload from Sep 15 to Sep 21.", _fake_llm_for(interp))
             payload = resp.json()["execution_result"]["resultPayload"]
-            assert payload["busy_days"] == []
+            assert payload["busyDays"] == []
         finally:
             engine.dispose()
 
@@ -593,8 +593,8 @@ class TestE2ECompletedCancelledFiltering:
             assert resp.status_code == 200
             payload = resp.json()["execution_result"]["resultPayload"]
             # Only 2 active tasks counted
-            assert payload["total_tasks"] == 2
-            names = {t["task_name"] for t in payload["recommended_order"]}
+            assert payload["totalTasks"] == 2
+            names = {t["taskName"] for t in payload["recommendedOrder"]}
             assert names == {"Active 1", "Active 2"}
             # Repository still returned all 4 — filtering is service-owned.
             # Verify by querying the repo directly.
@@ -680,9 +680,9 @@ class TestE2ETasksWithoutDeadline:
             )
             resp = _agent_post(app, "Analyze my workload from Sep 15 to Sep 21.", _fake_llm_for(interp))
             payload = resp.json()["execution_result"]["resultPayload"]
-            assert payload["total_tasks"] == 1
-            assert payload["deadline_collisions"] == []
-            assert payload["busy_days"] == []
+            assert payload["totalTasks"] == 1
+            assert payload["deadlineCollisions"] == []
+            assert payload["busyDays"] == []
         finally:
             engine.dispose()
 

@@ -29,10 +29,16 @@ class TaskService:
         description: str | None,
         deadline: datetime,
         priority: TaskPriority,
+        duration_minutes: int | None = None,
     ) -> Task:
         if deadline < datetime.now(timezone.utc):
             raise InvalidTaskError(
                 f"deadline ({deadline}) must not be in the past"
+            )
+
+        if duration_minutes is not None and duration_minutes <= 0:
+            raise InvalidTaskError(
+                "duration_minutes must be a positive integer"
             )
 
         priority_value = (
@@ -44,6 +50,7 @@ class TaskService:
             deadline=deadline,
             priority=priority_value,
             status=TaskStatus.TODO.value,
+            duration_minutes=duration_minutes,
         )
         return self._task_repository.create(task)
 
@@ -64,6 +71,7 @@ class TaskService:
         deadline: datetime | None = None,
         priority: TaskPriority | None = None,
         status: TaskStatus | None = None,
+        duration_minutes: object = _UNSET,
     ) -> Task:
         task = self.get_task(task_id)
 
@@ -71,6 +79,13 @@ class TaskService:
             raise InvalidTaskError(
                 f"deadline ({deadline}) must not be in the past"
             )
+
+        if duration_minutes is not _UNSET:
+            if duration_minutes is not None and duration_minutes <= 0:
+                raise InvalidTaskError(
+                    "duration_minutes must be a positive integer or null"
+                )
+            task.duration_minutes = duration_minutes
 
         if task_name is not None:
             task.task_name = task_name

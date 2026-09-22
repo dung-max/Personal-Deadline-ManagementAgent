@@ -128,11 +128,12 @@ class AgentResponseGenerator:
         """
         language_name = "English" if language == "en" else "Vietnamese"
 
-        # Extract key facts from workload result
-        total_tasks = result_payload.get("total_tasks", 0)
-        collision_count = len(result_payload.get("deadline_collisions", []))
-        busy_day_count = len(result_payload.get("busy_days", []))
-        has_recommended_order = len(result_payload.get("recommended_order", [])) > 0
+        # Extract key facts from workload result (camelCase API contract)
+        total_tasks = result_payload.get("totalTasks", 0)
+        collision_count = len(result_payload.get("deadlineCollisions", []))
+        busy_day_count = len(result_payload.get("busyDays", []))
+        has_recommended_order = len(result_payload.get("recommendedOrder", [])) > 0
+        scheduling_pressure = result_payload.get("schedulingPressure", [])
 
         # Build structured facts section
         facts = [
@@ -141,22 +142,31 @@ class AgentResponseGenerator:
 
         if collision_count > 0:
             facts.append(f"- Deadline collisions detected: {collision_count}")
-            collisions = result_payload.get("deadline_collisions", [])
+            collisions = result_payload.get("deadlineCollisions", [])
             for collision in collisions[:3]:  # Show up to 3
-                task_names = [t.get("task_name", "") for t in collision.get("tasks", [])]
+                task_names = [t.get("taskName", "") for t in collision.get("tasks", [])]
                 facts.append(f"  - Same deadline: {', '.join(task_names)}")
 
         if busy_day_count > 0:
             facts.append(f"- Busy days detected: {busy_day_count}")
-            busy_days = result_payload.get("busy_days", [])
+            busy_days = result_payload.get("busyDays", [])
             for day in busy_days[:3]:  # Show up to 3
                 date_str = day.get("date", "")
-                task_count = day.get("task_count", 0)
+                task_count = day.get("taskCount", 0)
                 facts.append(f"  - {date_str}: {task_count} tasks")
 
         if has_recommended_order:
-            recommended = result_payload.get("recommended_order", [])
+            recommended = result_payload.get("recommendedOrder", [])
             facts.append(f"- Recommended order available: {len(recommended)} tasks prioritized")
+
+        if scheduling_pressure:
+            facts.append(f"- Scheduling pressure detected: {len(scheduling_pressure)} overlapping feasibility window pair(s)")
+            for sp in scheduling_pressure[:3]:  # Show up to 3
+                a = sp.get("taskAName", "")
+                b = sp.get("taskBName", "")
+                overlap_start = sp.get("overlapStart", "")
+                overlap_end = sp.get("overlapEnd", "")
+                facts.append(f"  - {a} and {b}: overlap {overlap_start} — {overlap_end}")
 
         facts_text = "\n".join(facts)
 

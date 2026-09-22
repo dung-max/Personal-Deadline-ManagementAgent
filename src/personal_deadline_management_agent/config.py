@@ -35,6 +35,9 @@ class Settings:
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
     single_user_mode: bool = False
 
+    # Daily working budget for workload analysis (minutes)
+    daily_working_minutes: int = 480
+
     def __post_init__(self) -> None:
         if self.scheduler_tick_seconds < 5:
             raise ValueError(
@@ -43,6 +46,10 @@ class Settings:
         if not (1 <= self.scheduler_batch_size <= 1000):
             raise ValueError(
                 f"scheduler_batch_size must be between 1 and 1000, got {self.scheduler_batch_size}"
+            )
+        if not (0 < self.daily_working_minutes <= 1440):
+            raise ValueError(
+                f"daily_working_minutes must be between 1 and 1440 (minutes in a day), got {self.daily_working_minutes}"
             )
 
 
@@ -68,5 +75,8 @@ def load_config() -> Settings:
         ),
         scheduler_batch_size=int(
             os.getenv("SCHEDULER_BATCH_SIZE", "100")
+        ),
+        daily_working_minutes=int(
+            os.getenv("DAILY_WORKING_MINUTES", "480")
         ),
     )

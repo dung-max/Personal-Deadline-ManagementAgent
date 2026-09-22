@@ -54,6 +54,7 @@ def test_task_columns():
         "deadline",
         "priority",
         "status",
+        "duration_minutes",
         "created_at",
         "updated_at",
     }

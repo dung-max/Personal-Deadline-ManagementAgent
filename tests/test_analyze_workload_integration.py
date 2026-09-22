@@ -206,10 +206,10 @@ def test_analyze_workload_executes_successfully(
     assert analyzed_tasks[0].id == TASK_ID_1
     assert analyzed_tasks[1].id == TASK_ID_2
 
-    # Assert: result payload contains WorkloadAnalysisResult
+    # Assert: result payload contains WorkloadAnalysisResult (camelCase keys)
     assert result.result_payload is not None
-    assert result.result_payload["total_tasks"] == 2
-    assert len(result.result_payload["recommended_order"]) == 2
+    assert result.result_payload["totalTasks"] == 2
+    assert len(result.result_payload["recommendedOrder"]) == 2
 
 
 # --- Test B: Date range is passed correctly ----------------------------------
@@ -271,10 +271,10 @@ def test_analyze_workload_empty_result(
 
     # Assert: result is valid
     assert result.status == ExecutionStatus.EXECUTED
-    assert result.result_payload["total_tasks"] == 0
-    assert result.result_payload["deadline_collisions"] == []
-    assert result.result_payload["busy_days"] == []
-    assert result.result_payload["recommended_order"] == []
+    assert result.result_payload["totalTasks"] == 0
+    assert result.result_payload["deadlineCollisions"] == []
+    assert result.result_payload["busyDays"] == []
+    assert result.result_payload["recommendedOrder"] == []
 
 
 # --- Test D: Read-only behavior ----------------------------------------------
@@ -366,10 +366,10 @@ def test_analyze_workload_delegates_to_service(
     task_module.find_tasks_by_deadline_range.return_value = []
     mock_result = MagicMock(spec=WorkloadAnalysisResult)
     mock_result.model_dump.return_value = {
-        "total_tasks": 0,
-        "deadline_collisions": [],
-        "busy_days": [],
-        "recommended_order": [],
+        "totalTasks": 0,
+        "deadlineCollisions": [],
+        "busyDays": [],
+        "recommendedOrder": [],
         "explanation": "Mock result",
     }
     workload_service.analyze.return_value = mock_result

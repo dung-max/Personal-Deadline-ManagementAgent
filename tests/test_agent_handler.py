@@ -1114,7 +1114,7 @@ def test_analyze_workload_preserves_execution_result(client, pipeline_mocks):
         status=ExecutionStatus.EXECUTED,
         action_type=ActionType.ANALYZE_WORKLOAD,
         message="Original message",
-        result_payload={"total_tasks": 7, "explanation": "7 tasks"},
+        result_payload={"totalTasks": 7, "explanation": "7 tasks"},
     )
     pipeline_mocks["executor"].execute.return_value = original_result
 
@@ -1131,7 +1131,7 @@ def test_analyze_workload_preserves_execution_result(client, pipeline_mocks):
     # execution_result unchanged
     assert body["execution_result"]["actionType"] == "ANALYZE_WORKLOAD"
     assert body["execution_result"]["message"] == "Original message"
-    assert body["execution_result"]["resultPayload"]["total_tasks"] == 7
+    assert body["execution_result"]["resultPayload"]["totalTasks"] == 7
 
 
 def test_non_workload_action_keeps_original_message(client, pipeline_mocks):

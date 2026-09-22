@@ -29,7 +29,11 @@ from .task import (
 )
 from .workload import (
     BusyDayWarning,
+    DailyPressure,
     DeadlineCollision,
+    FeasibilityWindow,
+    OverloadWarning,
+    SchedulingPressure,
     TaskSummary,
     WorkloadAnalysisResult,
 )
@@ -44,12 +48,15 @@ __all__ = [
     "AgentResponse",
     "AgentResponseOutput",
     "BusyDayWarning",
+    "DailyPressure",
     "DateRangeExpression",
     "DeadlineCollision",
     "ErrorDetail",
     "ErrorResponse",
+    "FeasibilityWindow",
     "InterpretationOutput",
     "InterpretationResponseType",
+    "OverloadWarning",
     "ProposalStatus",
     "ReminderCreateRequest",
     "ReminderResponseData",

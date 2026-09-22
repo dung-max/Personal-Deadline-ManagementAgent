@@ -208,16 +208,22 @@ class ActionExecutor:
                 description=params.get("description"),
                 deadline=_to_datetime(params["deadline"]),
                 priority=params.get("priority", TaskPriority.MEDIUM),
+                duration_minutes=params.get("durationMinutes"),
             )
         if action is ActionType.UPDATE_TASK:
-            return self._tasks.update_task(
-                task_id=command.resource_id,  # type: ignore[arg-type]
-                task_name=params.get("taskName"),
-                description=params.get("description"),
-                deadline=_opt_datetime(params.get("deadline")),
-                priority=params.get("priority"),
-                status=params.get("status"),
-            )
+            update_kwargs: dict[str, Any] = {
+                "task_id": command.resource_id,
+                "task_name": params.get("taskName"),
+                "description": params.get("description"),
+                "deadline": _opt_datetime(params.get("deadline")),
+                "priority": params.get("priority"),
+                "status": params.get("status"),
+            }
+            # PATCH semantics for nullable fields — only send when explicitly in params
+            # to distinguish "omitted" (preserve) from "null" (clear).
+            if "durationMinutes" in params:
+                update_kwargs["duration_minutes"] = params["durationMinutes"]
+            return self._tasks.update_task(**update_kwargs)  # type: ignore[arg-type]
         if action is ActionType.DELETE_TASK:
             self._tasks.delete_task(task_id=command.resource_id)  # type: ignore[arg-type]
             return None
@@ -273,7 +279,7 @@ class ActionExecutor:
                 action_type=command.action_type,
                 resource_id=command.resource_id,
                 message="Workload analysis completed successfully.",
-                result_payload=entity.model_dump(),
+                result_payload=entity.model_dump(by_alias=True),
             )
 
         result_id, result_name = _entity_payload(entity)
